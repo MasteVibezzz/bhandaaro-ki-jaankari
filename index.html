@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>Bhandaaro ki Jaankaari - भंडारों की जानकारी</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1 class="app-title">
+                        <i class="fas fa-utensils"></i>
+                        <span data-key="app-title">भंडारों की जानकारी</span>
+                    </h1>
+                    <p class="app-subtitle" data-key="app-subtitle">Pune में मुफ्त भोजन स्थान</p>
+                </div>
+                <div class="header-right">
+                    <!-- Language Toggle -->
+                    <div class="language-toggle">
+                        <button class="lang-btn" id="langToggle">
+                            <i class="fas fa-language"></i>
+                            <span id="currentLang">EN</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Guest state -->
+                    <div class="auth-buttons" id="guestButtons">
+                        <button class="btn btn--outline btn--sm" id="signinBtn" data-key="signin-btn">साइन इन</button>
+                        <button class="btn btn--primary btn--sm" id="signupBtn" data-key="signup-btn">साइन अप</button>
+                    </div>
+                    
+                    <!-- Authenticated state -->
+                    <div class="user-menu hidden" id="userMenu">
+                        <div class="user-profile" id="userProfile">
+                            <i class="fas fa-user-circle"></i>
+                            <span id="userName">नाम</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="user-dropdown hidden" id="userDropdown">
+                            <button class="dropdown-item" id="signoutBtn">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span data-key="signout-btn">साइन आउट</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Controls -->
+    <div class="controls">
+        <div class="container">
+            <div class="controls-row">
+                <div class="search-filters">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchInput" data-placeholder="search-placeholder">
+                    </div>
+                    <select id="typeFilter" class="form-control">
+                        <option value="" data-key="filter-all-types">सभी प्रकार</option>
+                        <option value="daily" data-key="filter-daily">दैनिक</option>
+                        <option value="regular" data-key="filter-regular">नियमित</option>
+                        <option value="festival" data-key="filter-festival">त्योहार</option>
+                    </select>
+                    <select id="statusFilter" class="form-control">
+                        <option value="" data-key="filter-all-status">सभी स्थिति</option>
+                        <option value="active" data-key="filter-open">खुला</option>
+                        <option value="closed" data-key="filter-closed">बंद</option>
+                    </select>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn--primary" id="addLocationBtn">
+                        <i class="fas fa-plus"></i>
+                        <span data-key="add-location-btn">नया स्थान जोड़ें</span>
+                    </button>
+                    <div class="view-toggle">
+                        <button class="view-btn active" id="mapViewBtn">
+                            <i class="fas fa-map"></i>
+                        </button>
+                        <button class="view-btn" id="listViewBtn">
+                            <i class="fas fa-list"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <div class="content-grid">
+                <!-- Map View -->
+                <div class="map-section" id="mapSection">
+                    <div class="map-container">
+                        <div id="map"></div>
+                        <div class="map-stats">
+                            <div class="stat-item">
+                                <span class="stat-number" id="totalLocations">89</span>
+                                <span class="stat-label" data-key="total-locations">कुल स्थान</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-number active" id="activeToday">17</span>
+                                <span class="stat-label" data-key="open-today">आज खुले</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- List View -->
+                <div class="list-section hidden" id="listSection">
+                    <div id="locationsList" class="locations-list">
+                        <!-- Location cards will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Activity Feed -->
+                <div class="activity-section">
+                    <h3 data-key="community-activity">समुदायिक गतिविधि</h3>
+                    <div class="activity-feed" id="activityFeed">
+                        <!-- Activity items will be populated by JavaScript -->
+                    </div>
+                    <div class="activity-stats">
+                        <div class="stat-row">
+                            <span data-key="checkins-today">आज चेक-इन:</span>
+                            <span class="stat-value" id="checkinsToday">447</span>
+                        </div>
+                        <div class="stat-row">
+                            <span data-key="total-checkins">कुल चेक-इन:</span>
+                            <span class="stat-value" id="totalCheckins">23,567</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Sign In Modal -->
+    <div class="modal hidden" id="signinModal">
+        <div class="modal-overlay" id="signinOverlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 data-key="signin-title">साइन इन करें</h2>
+                <button class="modal-close" id="signinClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form class="modal-body" id="signinForm">
+                <div class="form-group">
+                    <label class="form-label" data-key="email-label">ईमेल</label>
+                    <input type="email" class="form-control" id="signinEmail" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" data-key="password-label">पासवर्ड</label>
+                    <input type="password" class="form-control" id="signinPassword" required>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="rememberMe">
+                        <span class="checkbox-text" data-key="remember-me">मुझे याद रखें</span>
+                    </label>
+                </div>
+                <div class="error-message hidden" id="signinError"></div>
+                <button type="submit" class="btn btn--primary btn--full-width" data-key="signin-submit">साइन इन करें</button>
+            </form>
+            <div class="modal-footer">
+                <p><span data-key="no-account">खाता नहीं है?</span> <a href="#" id="switchToSignup" data-key="signup-link">साइन अप करें</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sign Up Modal -->
+    <div class="modal hidden" id="signupModal">
+        <div class="modal-overlay" id="signupOverlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 data-key="signup-title">नया खाता बनाएं</h2>
+                <button class="modal-close" id="signupClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form class="modal-body" id="signupForm">
+                <div class="form-group">
+                    <label class="form-label" data-key="name-label">पूरा नाम</label>
+                    <input type="text" class="form-control" id="signupName" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" data-key="email-label">ईमेल</label>
+                    <input type="email" class="form-control" id="signupEmail" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" data-key="password-label">पासवर्ड</label>
+                    <input type="password" class="form-control" id="signupPassword" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" data-key="confirm-password-label">पासवर्ड की पुष्टि करें</label>
+                    <input type="password" class="form-control" id="signupConfirmPassword" required>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="agreeTerms" required>
+                        <span class="checkbox-text" data-key="agree-terms">मैं नियम और शर्तों से सहमत हूं</span>
+                    </label>
+                </div>
+                <div class="error-message hidden" id="signupError"></div>
+                <button type="submit" class="btn btn--primary btn--full-width" data-key="signup-submit">खाता बनाएं</button>
+            </form>
+            <div class="modal-footer">
+                <p><span data-key="have-account">पहले से खाता है?</span> <a href="#" id="switchToSignin" data-key="signin-link">साइन इन करें</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Location Modal -->
+    <div class="modal hidden" id="addLocationModal">
+        <div class="modal-overlay" id="addLocationOverlay"></div>
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 data-key="add-location-title">नया भंडारा स्थान जोड़ें</h2>
+                <button class="modal-close" id="addLocationClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form class="modal-body" id="addLocationForm">
+                <div class="form-row">
+                    <div class="form-column">
+                        <div class="form-group">
+                            <label class="form-label" data-key="location-name-label">भंडारा का नाम</label>
+                            <input type="text" class="form-control" id="locationName" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" data-key="address-label">पता</label>
+                            <textarea class="form-control" id="locationAddress" rows="3" readonly></textarea>
+                            <small class="form-help" data-key="map-help">नक्शे पर क्लिक करके स्थान चुनें</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" data-key="description-label">विवरण</label>
+                            <textarea class="form-control" id="locationDescription" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" data-key="type-label">प्रकार</label>
+                            <select class="form-control" id="locationType" required>
+                                <option value="" data-key="select-type">प्रकार चुनें</option>
+                                <option value="daily" data-key="type-daily">दैनिक</option>
+                                <option value="regular" data-key="type-regular">नियमित</option>
+                                <option value="festival" data-key="type-festival">त्योहार</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" data-key="timings-label">समय</label>
+                            <input type="text" class="form-control" id="locationTimings" data-placeholder="timings-placeholder" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" data-key="days-label">दिन</label>
+                            <div class="days-selection">
+                                <label class="day-checkbox">
+                                    <input type="checkbox" value="Monday"> 
+                                    <span data-key="monday">सोमवार</span>
+                                </label>
+                                <label class="day-checkbox">
+                                    <input type="checkbox" value="Tuesday"> 
+                                    <span data-key="tuesday">मंगलवार</span>
+                                </label>
+                                <label class="day-checkbox">
+                                    <input type="checkbox" value="Wednesday"> 
+                                    <span data-key="wednesday">बुधवार</span>
+                                </label>
+                                <label class="day-checkbox">
+                                    <input type="checkbox" value="Thursday"> 
+                                    <span data-key="thursday">गुरुवार</span>
+                                </label>
+                                <label class="day-checkbox">
+                                    <input type="checkbox" value="Friday"> 
+                                    <span data-key="friday">शुक्रवार</span>
+                                </label>
+                                <label class="day-checkbox">
+                                    <input type="checkbox" value="Saturday"> 
+                                    <span data-key="saturday">शनिवार</span>
+                                </label>
+                                <label class="day-checkbox">
+                                    <input type="checkbox" value="Sunday"> 
+                                    <span data-key="sunday">रविवार</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-column">
+                        <div class="form-group">
+                            <label class="form-label" data-key="select-location">मानचित्र पर स्थान चुनें</label>
+                            <div class="map-picker-container">
+                                <div id="mapPicker"></div>
+                                <div class="coordinates-display">
+                                    <span id="selectedCoordinates" data-key="click-map-instruction">स्थान चुनने के लिए नक्शे पर क्लिक करें</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="error-message hidden" id="addLocationError"></div>
+                <button type="submit" class="btn btn--primary" data-key="add-location-submit">स्थान जोड़ें</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Check-in Modal -->
+    <div class="modal hidden" id="checkinModal">
+        <div class="modal-overlay" id="checkinOverlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 data-key="checkin-title">चेक-इन करें</h2>
+                <button class="modal-close" id="checkinClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form class="modal-body" id="checkinForm">
+                <div class="checkin-location">
+                    <h4 id="checkinLocationName"></h4>
+                    <p id="checkinLocationAddress"></p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" data-key="share-experience">आपका अनुभव साझा करें</label>
+                    <textarea class="form-control" id="checkinFeedback" rows="3" data-placeholder="feedback-placeholder"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" data-key="rating-label">रेटिंग</label>
+                    <div class="rating-stars">
+                        <i class="fas fa-star" data-rating="1"></i>
+                        <i class="fas fa-star" data-rating="2"></i>
+                        <i class="fas fa-star" data-rating="3"></i>
+                        <i class="fas fa-star" data-rating="4"></i>
+                        <i class="fas fa-star" data-rating="5"></i>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn--primary btn--full-width" data-key="checkin-submit">चेक-इन करें</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    <div class="toast hidden" id="successToast">
+        <i class="fas fa-check-circle"></i>
+        <span id="successMessage">सफल हो गया!</span>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
