@@ -736,8 +736,6 @@ select.form-control {
   src: url('https://r2cdn.perplexity.ai/fonts/FKGroteskNeue.woff2')
     format('woff2');
 }
-
-/* END PERPLEXITY DESIGN SYSTEM */
 /* Additional styles for Bhandaaro ki Jaankaari application */
 
 /* Remove any unwanted circular elements or loading indicators */
@@ -955,6 +953,15 @@ html::after {
     max-width: 300px;
 }
 
+/* Style the search box to match site design: rounded, subtle background and border */
+.search-box {
+  background: var(--color-surface);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-lg);
+  padding: 4px 8px; /* small padding so icon and input have breathing room */
+  box-shadow: var(--shadow-xs);
+}
+
 .search-box i {
     position: absolute;
     left: var(--space-12);
@@ -969,6 +976,17 @@ html::after {
     padding-left: var(--space-32);
     min-height: 44px;
     width: 100%;
+}
+
+.search-box input {
+  background: transparent;
+  border: none;
+  outline: none;
+  border-radius: calc(var(--radius-lg) - 2px);
+  padding: 8px 10px 8px calc(var(--space-32) + var(--space-8));
+  box-sizing: border-box;
+  font-family: var(--font-family-base);
+  color: var(--color-text);
 }
 
 .form-control {
@@ -1028,12 +1046,13 @@ html::after {
 }
 
 .content-grid {
-    display: grid;
-    grid-template-columns: 1fr 300px;
-    gap: var(--space-20);
-    align-items: start;
-    width: 100%;
-    max-width: 100%;
+  display: grid;
+  /* Stack everything vertically so activity feed is always below the map */
+  grid-template-columns: 1fr;
+  gap: var(--space-20);
+  align-items: start;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Map Section */
@@ -1042,6 +1061,11 @@ html::after {
     max-width: 100%;
     overflow: hidden;
 }
+
+/* Ensure visual order: map first, list second, activity third */
+.map-section { order: 1; }
+.list-section { order: 2; }
+.activity-section { order: 3; }
 
 .map-container {
     position: relative;
@@ -1591,6 +1615,12 @@ html::after {
     transform: translateY(0);
 }
 
+/* Ensure hidden state overrides .toast's display when both classes are present */
+.toast.hidden {
+  display: none;
+  transform: translateY(-100%);
+}
+
 /* Custom Leaflet Popup */
 .custom-popup {
     font-family: var(--font-family-base);
@@ -1639,7 +1669,7 @@ html::after {
     gap: var(--space-6);
     margin-bottom: var(--space-4);
     font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+    color: var(--color-black);
     word-break: break-word;
 }
 
@@ -1677,7 +1707,7 @@ html::after {
 }
 
 .popup-btn--secondary {
-    background: var(--color-secondary);
+    background: var(--color-black);
     color: var(--color-text);
 }
 

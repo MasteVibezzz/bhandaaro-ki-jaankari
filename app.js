@@ -1,4 +1,3 @@
-// Bhandaaro ki Jaankaari - JavaScript Application with Language Support and Fixed List View
 class BhandaaraApp {
     constructor() {
         this.map = null;
@@ -101,7 +100,7 @@ class BhandaaraApp {
                 'validation-required-fields': 'कृपया सभी आवश्यक फील्ड भरें'
             },
             en: {
-                'app-title': 'Bhandaara Information',
+                'app-title': 'Bhandaaro ki Jaankari',
                 'app-subtitle': 'Free Food Locations in Pune',
                 'signin-btn': 'Sign In',
                 'signup-btn': 'Sign Up',
@@ -1400,12 +1399,27 @@ class BhandaaraApp {
         
         if (toast && successMessage) {
             successMessage.textContent = message;
+            // Ensure any previous timeouts are cleared so toast doesn't get stuck
+            if (this._toastTimeout) {
+                clearTimeout(this._toastTimeout);
+                this._toastTimeout = null;
+            }
+
+            // Make toast visible
             toast.classList.remove('hidden');
+            // Force reflow so the transition runs when re-adding .show
+            // eslint-disable-next-line no-unused-expressions
+            toast.offsetHeight;
             toast.classList.add('show');
-            
-            setTimeout(() => {
+
+            // Hide after delay
+            this._toastTimeout = setTimeout(() => {
                 toast.classList.remove('show');
-                setTimeout(() => toast.classList.add('hidden'), 300);
+                // Allow transition to finish then hide the element (300ms matches CSS)
+                this._toastTimeout = setTimeout(() => {
+                    toast.classList.add('hidden');
+                    this._toastTimeout = null;
+                }, 300);
             }, 3000);
         }
     }
