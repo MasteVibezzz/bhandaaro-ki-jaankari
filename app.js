@@ -636,6 +636,16 @@ class BhandaaraApp {
         });
     }
 
+    escapeHTML(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        }[char]));
+    }
+
     createPopupContent(location) {
         const statusClass = location.todayOpen ? 'open' : 'closed';
         const statusText = location.todayOpen ? this.translate('open-status') : this.translate('closed-status');
@@ -643,7 +653,7 @@ class BhandaaraApp {
         return `
             <div class="custom-popup">
                 <div class="popup-header">
-                    <h4 class="popup-title">${location.name}</h4>
+                    <h4 class="popup-title">${this.escapeHTML(location.name)}</h4>
                     <span class="popup-status ${statusClass}">
                         <i class="fas fa-circle"></i>
                         ${statusText}
@@ -652,11 +662,11 @@ class BhandaaraApp {
                 <div class="popup-details">
                     <div class="popup-detail">
                         <i class="fas fa-map-marker-alt"></i>
-                        <span>${location.address}</span>
+                        <span>${this.escapeHTML(location.address)}</span>
                     </div>
                     <div class="popup-detail">
                         <i class="fas fa-clock"></i>
-                        <span>${location.timings}</span>
+                        <span>${this.escapeHTML(location.timings)}</span>
                     </div>
                     <div class="popup-detail">
                         <i class="fas fa-star"></i>
@@ -1138,6 +1148,19 @@ class BhandaaraApp {
         // Update location stats
         this.selectedLocation.checkinsToday++;
         this.selectedLocation.totalCheckins++;
+
+        // Save the selected rating and review with the check-in.
+        if (this.selectedRating > 0) {
+            if (!Array.isArray(this.selectedLocation.reviews)) this.selectedLocation.reviews = [];
+            this.selectedLocation.reviews.push({
+                user: this.currentUser.name,
+                rating: this.selectedRating,
+                comment: feedback,
+                time: this.translate('just-now')
+            });
+            const totalRating = this.selectedLocation.reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+            this.selectedLocation.rating = Number((totalRating / this.selectedLocation.reviews.length).toFixed(1));
+        }
         
         // Add to activity
         this.recentActivity.unshift({
@@ -1283,7 +1306,7 @@ class BhandaaraApp {
                     </div>
                     <div class="location-detail">
                         <i class="fas fa-utensils"></i>
-                        <span>${location.description}</span>
+                        <span>${this.escapeHTML(location.description)}</span>
                     </div>
                 </div>
                 <div class="location-actions">
@@ -1326,10 +1349,10 @@ class BhandaaraApp {
                         <span class="activity-time">${activity.time}</span>
                     </div>
                     <div class="activity-meta">
-                        <strong>${activity.user}</strong> - ${activity.location}
+                        <strong>${this.escapeHTML(activity.user)}</strong> - ${this.escapeHTML(activity.location)}
                     </div>
-                    ${activity.feedback ? `<div class="activity-content">"${activity.feedback}"</div>` : ''}
-                    ${activity.comment ? `<div class="activity-content">"${activity.comment}"</div>` : ''}
+                    ${activity.feedback ? `<div class="activity-content">"${this.escapeHTML(activity.feedback)}"</div>` : ''}
+                    ${activity.comment ? `<div class="activity-content">"${this.escapeHTML(activity.comment)}"</div>` : ''}
                 </div>
             `;
         }).join('');
