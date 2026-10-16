@@ -433,7 +433,12 @@ class BhandaaraApp {
         if (storedLocations) {
             try {
                 const parsed = JSON.parse(storedLocations);
-                this.bhandaaras = [...this.bhandaaras, ...parsed];
+                if (Array.isArray(parsed)) {
+                    const storedById = new Map(parsed.map(location => [location.id, location]));
+                    this.bhandaaras = this.bhandaaras
+                        .map(location => storedById.get(location.id) || location)
+                        .concat(parsed.filter(location => !this.bhandaaras.some(existing => existing.id === location.id)));
+                }
             } catch (e) {
                 console.warn('Failed to parse stored locations');
             }
@@ -1375,8 +1380,7 @@ class BhandaaraApp {
 
     saveToStorage() {
         try {
-            const userAddedLocations = this.bhandaaras.filter(b => b.id > 10);
-            localStorage.setItem('bhandaaras', JSON.stringify(userAddedLocations));
+            localStorage.setItem('bhandaaras', JSON.stringify(this.bhandaaras));
             localStorage.setItem('recentActivity', JSON.stringify(this.recentActivity.slice(0, 20)));
         } catch (e) {
             console.warn('Failed to save to storage');
