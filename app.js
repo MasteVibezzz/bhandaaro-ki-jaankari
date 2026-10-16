@@ -429,30 +429,36 @@ class BhandaaraApp {
 
     loadStoredData() {
         // Load stored locations
-        const storedLocations = localStorage.getItem('bhandaaras');
-        if (storedLocations) {
+        const storedLocations = this.readStorage('bhandaaras', []);
+        if (Array.isArray(storedLocations)) {
             try {
-                const parsed = JSON.parse(storedLocations);
-                if (Array.isArray(parsed)) {
-                    const storedById = new Map(parsed.map(location => [location.id, location]));
-                    this.bhandaaras = this.bhandaaras
-                        .map(location => storedById.get(location.id) || location)
-                        .concat(parsed.filter(location => !this.bhandaaras.some(existing => existing.id === location.id)));
-                }
+                const storedById = new Map(storedLocations.map(location => [location.id, location]));
+                this.bhandaaras = this.bhandaaras
+                    .map(location => storedById.get(location.id) || location)
+                    .concat(storedLocations.filter(location => !this.bhandaaras.some(existing => existing.id === location.id)));
             } catch (e) {
                 console.warn('Failed to parse stored locations');
             }
         }
 
         // Load stored activity
-        const storedActivity = localStorage.getItem('recentActivity');
-        if (storedActivity) {
+        const storedActivity = this.readStorage('recentActivity', []);
+        if (Array.isArray(storedActivity)) {
             try {
-                const parsed = JSON.parse(storedActivity);
-                this.recentActivity = [...parsed, ...this.recentActivity];
+                this.recentActivity = [...storedActivity, ...this.recentActivity];
             } catch (e) {
                 console.warn('Failed to parse stored activity');
             }
+        }
+    }
+
+    readStorage(key, fallback) {
+        try {
+            const rawValue = localStorage.getItem(key);
+            return rawValue ? JSON.parse(rawValue) : fallback;
+        } catch (e) {
+            console.warn(`Unable to read localStorage key "${key}"`);
+            return fallback;
         }
     }
 
@@ -1149,6 +1155,11 @@ class BhandaaraApp {
         
         const feedbackEl = document.getElementById('checkinFeedback');
         const feedback = feedbackEl ? feedbackEl.value || 'Great experience!' : 'Great experience!';
+
+        if (!this.selectedRating) {
+            this.showError('checkinError', this.translate('validation-rating') || 'Please select a rating');
+            return;
+        }
         
         // Update location stats
         this.selectedLocation.checkinsToday++;
@@ -1284,7 +1295,9 @@ class BhandaaraApp {
         if (!container) return;
 
         const locations = this.getFilteredLocations();
-        container.innerHTML = locations.map(location => this.createLocationCard(location)).join('');
+        container.innerHTML = locations.length
+            ? locations.map(location => this.createLocationCard(location)).join('')
+            : `<p class="empty-state">${this.escapeHTML(this.translate('no-results') || 'No locations found.')}</p>`;
     }
 
     createLocationCard(location) {
