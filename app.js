@@ -97,7 +97,9 @@ class BhandaaraApp {
                 'validation-password-mismatch': 'पासवर्ड मेल नहीं खा रहे',
                 'validation-terms': 'कृपया नियम और शर्तों से सहमत हों',
                 'validation-select-location': 'कृपया नक्शे पर स्थान चुनें',
-                'validation-required-fields': 'कृपया सभी आवश्यक फील्ड भरें'
+                'validation-required-fields': 'कृपया सभी आवश्यक फील्ड भरें',
+                'validation-rating': 'कृपया रेटिंग चुनें',
+                'no-results': 'कोई स्थान नहीं मिला।'
             },
             en: {
                 'app-title': 'Bhandaaro ki Jaankari',
@@ -183,7 +185,9 @@ class BhandaaraApp {
                 'validation-password-mismatch': 'Passwords do not match',
                 'validation-terms': 'Please agree to terms and conditions',
                 'validation-select-location': 'Please select location on map',
-                'validation-required-fields': 'Please fill all required fields'
+                'validation-required-fields': 'Please fill all required fields',
+                'validation-rating': 'Please select a rating',
+                'no-results': 'No locations found.'
             }
         };
         
@@ -428,42 +432,111 @@ class BhandaaraApp {
     }
 
     loadStoredData() {
+        this.bhandaaras = this.deduplicateLocations(
+            this.bhandaaras.map(location => this.normalizeLocation(location))
+        );
+
         // Load stored locations
         const storedLocations = this.readStorage('bhandaaras', []);
         if (Array.isArray(storedLocations)) {
-            try {
-                const storedById = new Map(storedLocations.map(location => [location.id, location]));
-                this.bhandaaras = this.bhandaaras
-                    .map(location => storedById.get(location.id) || location)
-                    .concat(storedLocations.filter(location => !this.bhandaaras.some(existing => existing.id === location.id)));
-            } catch (e) {
-                console.warn('Failed to parse stored locations');
-            }
+            const normalizedStored = storedLocations
+                .filter(location => location && typeof location === 'object')
+                .map(location => this.normalizeLocation(location));
+            this.bhandaaras = this.deduplicateLocations([
+                ...this.bhandaaras,
+                ...normalizedStored
+            ]);
         }
 
         // Load stored activity
         const storedActivity = this.readStorage('recentActivity', []);
         if (Array.isArray(storedActivity)) {
-            try {
-                this.recentActivity = [...storedActivity, ...this.recentActivity];
-            } catch (e) {
-                console.warn('Failed to parse stored activity');
-            }
+            this.recentActivity = this.deduplicateActivity([
+                ...storedActivity.filter(activity => activity && typeof activity === 'object'),
+                ...this.recentActivity
+            ]);
         }
     }
 
-    readStorage(key, fallback) {
+    normalizeLocation(location) {
+        const currentRating = Number(location.rating) || 0;
+        const reviews = Array.isArray(location.reviews) ? location.reviews : [];
+
+        return {
+            ...location,
+            reviews: reviews.map(review => {
+                if (typeof review === 'string') {
+                    return { rating: currentRating, comment: review };
+                }
+
+                return {
+                    ...review,
+                    rating: Number(review.rating) || currentRating,
+                    comment: String(review.comment ?? review.feedback ?? '')
+                };
+            })
+        };
+    }
+
+    deduplicateLocations(locations) {
+        const uniqueLocations = new Map();
+        locations.forEach(location => {
+            if (location && location.id !== undefined && location.id !== null) {
+                uniqueLocations.set(String(location.id), location);
+            }
+        });
+        return Array.from(uniqueLocations.values());
+    }
+
+    deduplicateActivity(activities) {
+        const seen = new Set();
+        return activities.filter(activity => {
+            const key = [
+                activity.type,
+                activity.user,
+                activity.location,
+                activity.time,
+                activity.feedback,
+                activity.comment,
+                activity.rating
+            ].join('|');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    readStorage(key, fallback, storage = localStorage, parseJson = true) {
         try {
-            const rawValue = localStorage.getItem(key);
-            return rawValue ? JSON.parse(rawValue) : fallback;
+            const rawValue = storage.getItem(key);
+            if (rawValue === null) return fallback;
+            return parseJson ? JSON.parse(rawValue) : rawValue;
         } catch (e) {
-            console.warn(`Unable to read localStorage key "${key}"`);
+            console.warn(`Unable to read storage key "${key}"`);
             return fallback;
         }
     }
 
+    writeStorage(key, value, storage = localStorage, stringify = true) {
+        try {
+            storage.setItem(key, stringify ? JSON.stringify(value) : value);
+            return true;
+        } catch (e) {
+            console.warn(`Unable to write storage key "${key}"`);
+            return false;
+        }
+    }
+
+    removeStorage(key, storage = localStorage) {
+        try {
+            storage.removeItem(key);
+        } catch (e) {
+            console.warn(`Unable to remove storage key "${key}"`);
+        }
+    }
+
     loadLanguagePreference() {
-        const savedLanguage = localStorage.getItem('preferredLanguage');
+        const savedLanguage = this.readStorage('preferredLanguage', null, localStorage, false);
         if (savedLanguage && this.translations[savedLanguage]) {
             this.currentLanguage = savedLanguage;
         }
@@ -479,7 +552,7 @@ class BhandaaraApp {
 
     toggleLanguage() {
         this.currentLanguage = this.currentLanguage === 'hi' ? 'en' : 'hi';
-        localStorage.setItem('preferredLanguage', this.currentLanguage);
+        this.writeStorage('preferredLanguage', this.currentLanguage, localStorage, false);
         this.updateLanguageToggle();
         this.applyTranslations();
         this.renderLocations(); // Re-render to apply translations
@@ -524,18 +597,19 @@ class BhandaaraApp {
     }
 
     checkAuthState() {
-        const user = localStorage.getItem('currentUser');
-        if (user) {
-            try {
-                this.currentUser = JSON.parse(user);
-                this.showAuthenticatedState();
-            } catch (e) {
-                localStorage.removeItem('currentUser');
-                this.showGuestState();
-            }
-        } else {
-            this.showGuestState();
+        const rememberedUser = this.readStorage('currentUser', null, localStorage);
+        const sessionUser = this.readStorage('currentUser', null, sessionStorage);
+        const user = rememberedUser || sessionUser;
+
+        if (user && typeof user.name === 'string' && typeof user.email === 'string') {
+            this.currentUser = user;
+            this.showAuthenticatedState();
+            return;
         }
+
+        this.removeStorage('currentUser', localStorage);
+        this.removeStorage('currentUser', sessionStorage);
+        this.showGuestState();
     }
 
     showAuthenticatedState() {
@@ -681,14 +755,14 @@ class BhandaaraApp {
                     </div>
                     <div class="popup-detail">
                         <i class="fas fa-star"></i>
-                        <span>${location.rating}/5 (${location.totalCheckins} ${this.translate('checkin-btn').toLowerCase()})</span>
+                        <span>${this.escapeHTML(location.rating)}/5 (${this.escapeHTML(location.totalCheckins)} ${this.translate('checkin-btn').toLowerCase()})</span>
                     </div>
                 </div>
                 <div class="popup-actions">
-                    <button class="popup-btn popup-btn--primary" onclick="window.app.openCheckinModal(${location.id})">
+                    <button class="popup-btn popup-btn--primary" onclick="window.app.openCheckinModal(${Number(location.id)})">
                         ${this.translate('checkin-btn')}
                     </button>
-                    <button class="popup-btn popup-btn--secondary" onclick="window.app.showLocationDetails(${location.id})">
+                    <button class="popup-btn popup-btn--secondary" onclick="window.app.showLocationDetails(${Number(location.id)})">
                         ${this.translate('view-details-btn')}
                     </button>
                 </div>
@@ -735,19 +809,9 @@ class BhandaaraApp {
     }
 
     reverseGeocode(latlng) {
-        // Simulate reverse geocoding
-        const areas = [
-            "Budhwar Peth", "Koregaon Park", "Kondhwa Road", "Shaniwar Peth", 
-            "Parvati Paytha", "FC Road", "Viman Nagar", "Kothrud", 
-            "Bajirao Road", "Hadapsar", "Baner", "Aundh", "Deccan"
-        ];
-        
-        const randomArea = areas[Math.floor(Math.random() * areas.length)];
-        const address = `${randomArea}, Pune, Maharashtra 411001`;
-        
         const addressField = document.getElementById('locationAddress');
         if (addressField) {
-            addressField.value = address;
+            addressField.value = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
         }
     }
 
@@ -961,9 +1025,11 @@ class BhandaaraApp {
         
         const emailEl = document.getElementById('signinEmail');
         const passwordEl = document.getElementById('signinPassword');
+        const rememberMeEl = document.getElementById('rememberMe');
         
         const email = emailEl ? emailEl.value : '';
         const password = passwordEl ? passwordEl.value : '';
+        const rememberMe = rememberMeEl ? rememberMeEl.checked : false;
         
         // Basic validation
         if (!this.validateEmail(email)) {
@@ -983,7 +1049,10 @@ class BhandaaraApp {
         };
 
         this.currentUser = user;
-        localStorage.setItem('currentUser', JSON.stringify(user));
+        const selectedStorage = rememberMe ? localStorage : sessionStorage;
+        const otherStorage = rememberMe ? sessionStorage : localStorage;
+        this.writeStorage('currentUser', user, selectedStorage);
+        this.removeStorage('currentUser', otherStorage);
         
         this.showAuthenticatedState();
         this.closeModal('signinModal');
@@ -1034,7 +1103,8 @@ class BhandaaraApp {
         // Create user
         const user = { name, email };
         this.currentUser = user;
-        localStorage.setItem('currentUser', JSON.stringify(user));
+        this.writeStorage('currentUser', user, sessionStorage);
+        this.removeStorage('currentUser', localStorage);
         
         this.showAuthenticatedState();
         this.closeModal('signupModal');
@@ -1043,7 +1113,8 @@ class BhandaaraApp {
 
     signOut() {
         this.currentUser = null;
-        localStorage.removeItem('currentUser');
+        this.removeStorage('currentUser', localStorage);
+        this.removeStorage('currentUser', sessionStorage);
         this.showGuestState();
         const dropdown = document.getElementById('userDropdown');
         if (dropdown) {
@@ -1109,8 +1180,7 @@ class BhandaaraApp {
         };
         
         this.bhandaaras.push(newLocation);
-        this.saveToStorage();
-        
+
         // Add to activity
         this.recentActivity.unshift({
             type: "addition",
@@ -1118,6 +1188,8 @@ class BhandaaraApp {
             location: name,
             time: this.translate('just-now')
         });
+
+        this.saveToStorage();
         
         this.renderLocations();
         this.renderActivityFeed();
@@ -1189,9 +1261,9 @@ class BhandaaraApp {
         
         // Update global stats
         this.stats.checkinsToday++;
-        this.stats.totalCheckins++;
         
         this.saveToStorage();
+        this.renderLocations();
         this.renderActivityFeed();
         this.updateStats();
         this.addMarkers(); // Refresh markers with updated stats
@@ -1305,9 +1377,9 @@ class BhandaaraApp {
         const statusText = location.todayOpen ? this.translate('open-status') : this.translate('closed-status');
         
         return `
-            <div class="location-card">
+                <div class="location-card">
                 <div class="location-header">
-                    <h3 class="location-title">${location.name}</h3>
+                    <h3 class="location-title">${this.escapeHTML(location.name)}</h3>
                     <span class="location-status ${statusClass}">
                         <i class="fas fa-circle"></i>
                         ${statusText}
@@ -1316,11 +1388,11 @@ class BhandaaraApp {
                 <div class="location-details">
                     <div class="location-detail">
                         <i class="fas fa-map-marker-alt"></i>
-                        <span>${location.address}</span>
+                        <span>${this.escapeHTML(location.address)}</span>
                     </div>
                     <div class="location-detail">
                         <i class="fas fa-clock"></i>
-                        <span>${location.timings}</span>
+                        <span>${this.escapeHTML(location.timings)}</span>
                     </div>
                     <div class="location-detail">
                         <i class="fas fa-utensils"></i>
@@ -1328,12 +1400,12 @@ class BhandaaraApp {
                     </div>
                 </div>
                 <div class="location-actions">
-                    <button class="btn btn--primary btn--sm checkin-btn" onclick="window.app.openCheckinModal(${location.id})">
+                    <button class="btn btn--primary btn--sm checkin-btn" onclick="window.app.openCheckinModal(${Number(location.id)})">
                         ${this.translate('checkin-btn')}
                     </button>
                     <div class="location-stats">
-                        <span><i class="fas fa-star"></i> ${location.rating}</span>
-                        <span><i class="fas fa-users"></i> ${location.checkinsToday} ${this.translate('today').toLowerCase()}</span>
+                        <span><i class="fas fa-star"></i> ${this.escapeHTML(location.rating)}</span>
+                        <span><i class="fas fa-users"></i> ${this.escapeHTML(location.checkinsToday)} ${this.translate('today').toLowerCase()}</span>
                     </div>
                 </div>
             </div>
@@ -1363,8 +1435,8 @@ class BhandaaraApp {
             return `
                 <div class="activity-item">
                     <div class="activity-header">
-                        <span class="activity-type ${typeClass}">${typeText}</span>
-                        <span class="activity-time">${activity.time}</span>
+                        <span class="activity-type ${this.escapeHTML(typeClass)}">${typeText}</span>
+                        <span class="activity-time">${this.escapeHTML(activity.time)}</span>
                     </div>
                     <div class="activity-meta">
                         <strong>${this.escapeHTML(activity.user)}</strong> - ${this.escapeHTML(activity.location)}
@@ -1378,7 +1450,8 @@ class BhandaaraApp {
 
     updateStats() {
         const activeCount = this.bhandaaras.filter(b => b.todayOpen).length;
-        const totalCheckins = this.bhandaaras.reduce((sum, b) => sum + b.checkinsToday, 0);
+        const checkinsToday = this.bhandaaras.reduce((sum, b) => sum + (Number(b.checkinsToday) || 0), 0);
+        const totalCheckins = this.bhandaaras.reduce((sum, b) => sum + (Number(b.totalCheckins) || 0), 0);
         
         const totalLocationsEl = document.getElementById('totalLocations');
         const activeTodayEl = document.getElementById('activeToday');
@@ -1387,17 +1460,13 @@ class BhandaaraApp {
 
         if (totalLocationsEl) totalLocationsEl.textContent = this.bhandaaras.length;
         if (activeTodayEl) activeTodayEl.textContent = activeCount;
-        if (checkinsTodayEl) checkinsTodayEl.textContent = totalCheckins.toLocaleString();
-        if (totalCheckinsEl) totalCheckinsEl.textContent = this.stats.totalCheckins.toLocaleString();
+        if (checkinsTodayEl) checkinsTodayEl.textContent = checkinsToday.toLocaleString();
+        if (totalCheckinsEl) totalCheckinsEl.textContent = totalCheckins.toLocaleString();
     }
 
     saveToStorage() {
-        try {
-            localStorage.setItem('bhandaaras', JSON.stringify(this.bhandaaras));
-            localStorage.setItem('recentActivity', JSON.stringify(this.recentActivity.slice(0, 20)));
-        } catch (e) {
-            console.warn('Failed to save to storage');
-        }
+        this.writeStorage('bhandaaras', this.bhandaaras);
+        this.writeStorage('recentActivity', this.recentActivity.slice(0, 20));
     }
 
     showLocationDetails(locationId) {
