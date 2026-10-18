@@ -46,6 +46,16 @@ The prototype includes:
 
 There is no build system, backend service, or package installation requirement in the current version.
 
+Run the automated regression checks with Node.js 22 or newer using `npm test`.
+For browser checks, install Playwright separately and run `node tests/browser.mjs`.
+The browser suite uses Chromium by default; `CHROME_PATH` can select an installed Chrome executable.
+It requires internet access for Leaflet and map tiles.
+
+The application context in `app.js` owns shared state. Modules receive it explicitly:
+`locations.js` handles data workflows, `auth.js` handles prototype sessions,
+`map.js` owns Leaflet lifecycle, and `ui.js` handles rendering and DOM events.
+Generated cards and popups use delegated data attributes rather than global handlers.
+
 ## Running locally
 
 ### Prerequisites
@@ -63,9 +73,7 @@ git clone https://github.com/MasteVibezzz/bhandaaro-ki-jaankari.git
 cd bhandaaro-ki-jaankari
 ```
 
-Open `index.html` in your browser. No API keys or environment variables are required.
-
-If your browser restricts storage when opening local files, serve the folder with a local static server. For example, if Python 3 is installed:
+Serve the folder over HTTP. Native ES modules require this instead of opening `index.html` directly. No API keys or environment variables are required. With Python 3 installed:
 
 ```bash
 python3 -m http.server 8000
@@ -81,7 +89,15 @@ Prototype data saved in localStorage belongs to that browser and origin. Clearin
 bhandaaro-ki-jaankari/
 ├── index.html   # Page layout and forms
 ├── style.css    # Styling and responsive layouts
-├── app.js       # Maps, interactions, sample data, and local state
+├── app.js       # Initialization and shared application context
+├── locations.js # Locations, reviews, filtering and persistence workflows
+├── auth.js      # Prototype authentication
+├── map.js       # Leaflet maps, markers and viewport handling
+├── ui.js        # Rendering, translations, modals and delegated events
+├── demo-data.js # Fresh seed data for each application instance
+├── translations.js # Hindi and English dictionaries
+├── storage.js   # Resilient browser storage helpers
+├── tests/       # Automated regression checks
 └── README.md    # Project documentation
 ```
 
@@ -95,7 +111,7 @@ The following items are planned improvements, not completed features:
 - [ ] Connect rating and review submissions to persistent records.
 - [ ] Add community verification, moderation, and reporting for location information.
 - [ ] Improve meal schedules, availability updates, and location accuracy.
-- [ ] Organize the application into maintainable modules.
+- [x] Organize the application into maintainable modules.
 - [ ] Add automated tests, accessibility checks, and validation.
 - [ ] Publish a hosted demo with screenshots and deployment documentation.
 
