@@ -1,5 +1,10 @@
 const translations = {
             hi: {
+                'api-loading': 'जानकारी लोड हो रही है…',
+                'api-ready': 'जानकारी अपडेट है।',
+                'api-unavailable': 'सर्वर से संपर्क नहीं हो सका। फिर से प्रयास करें।',
+                'api-retry': 'फिर से प्रयास करें',
+                'demo-notice': 'कुछ स्थान और समीक्षाएँ उदाहरण हैं। भोजन की उपलब्धता सत्यापित नहीं है।',
                 'app-title': 'भंडारों की जानकारी',
                 'app-subtitle': 'Pune में मुफ्त भोजन स्थान',
                 'signin-btn': 'साइन इन',
@@ -79,7 +84,7 @@ const translations = {
                 'validation-email': 'कृपया वैध ईमेल पता दर्ज करें',
                 'validation-password': 'कृपया पासवर्ड दर्ज करें',
                 'validation-name': 'कृपया अपना नाम दर्ज करें',
-                'validation-password-length': 'पासवर्ड कम से कम 6 अक्षर का होना चाहिए',
+                'validation-password-length': 'पासवर्ड कम से कम 8 अक्षर का होना चाहिए',
                 'validation-password-mismatch': 'पासवर्ड मेल नहीं खा रहे',
                 'validation-terms': 'कृपया नियम और शर्तों से सहमत हों',
                 'validation-select-location': 'कृपया नक्शे पर स्थान चुनें',
@@ -88,6 +93,11 @@ const translations = {
                 'no-results': 'कोई स्थान नहीं मिला।'
             },
             en: {
+                'api-loading': 'Loading information…',
+                'api-ready': 'Information is up to date.',
+                'api-unavailable': 'Cannot reach the server. Please try again.',
+                'api-retry': 'Retry',
+                'demo-notice': 'Some listings and reviews are demonstration data, not verified meal availability.',
                 'app-title': 'Bhandaaro ki Jaankari',
                 'app-subtitle': 'Free Food Locations in Pune',
                 'signin-btn': 'Sign In',
@@ -167,7 +177,7 @@ const translations = {
                 'validation-email': 'Please enter a valid email address',
                 'validation-password': 'Please enter password',
                 'validation-name': 'Please enter your name',
-                'validation-password-length': 'Password must be at least 6 characters',
+                'validation-password-length': 'Password must be at least 8 characters',
                 'validation-password-mismatch': 'Passwords do not match',
                 'validation-terms': 'Please agree to terms and conditions',
                 'validation-select-location': 'Please select location on map',

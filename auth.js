@@ -1,127 +1,62 @@
-// Functions receive the application context explicitly; app.js owns shared state.
-import { readStorage, writeStorage, removeStorage } from './storage.js';
+import { request, submitForm } from './api.js';
 
-export function checkAuthState(app) {
-    const rememberedUser = readStorage('currentUser', null, localStorage);
-    const sessionUser = readStorage('currentUser', null, sessionStorage);
-    const user = rememberedUser || sessionUser;
-
-    if (user && typeof user.name === 'string' && typeof user.email === 'string') {
-        app.currentUser = user;
+export async function checkAuthState(app) {
+    try {
+        app.currentUser = await request('/auth/me');
         app.showAuthenticatedState();
-        return;
+    } catch (error) {
+        if (error.status !== 401) throw error;
+        app.currentUser = null;
+        app.showGuestState();
     }
-
-    removeStorage('currentUser', localStorage);
-    removeStorage('currentUser', sessionStorage);
-    app.showGuestState();
 }
 
-export function handleSignin(app, e) {
-    e.preventDefault();
-    
-    const emailEl = document.getElementById('signinEmail');
-    const passwordEl = document.getElementById('signinPassword');
-    const rememberMeEl = document.getElementById('rememberMe');
-    
-    const email = emailEl ? emailEl.value : '';
-    const password = passwordEl ? passwordEl.value : '';
-    const rememberMe = rememberMeEl ? rememberMeEl.checked : false;
-    
-    // Basic validation
-    if (!app.validateEmail(email)) {
-        app.showError('signinError', app.translate('validation-email'));
-        return;
-    }
-
-    if (!password.trim()) {
-        app.showError('signinError', app.translate('validation-password'));
-        return;
-    }
-
-    // Simulate authentication
-    const user = {
-        name: email.split('@')[0],
-        email: email
-    };
-
-    app.currentUser = user;
-    const selectedStorage = rememberMe ? localStorage : sessionStorage;
-    const otherStorage = rememberMe ? sessionStorage : localStorage;
-    writeStorage('currentUser', user, selectedStorage);
-    removeStorage('currentUser', otherStorage);
-    
-    app.showAuthenticatedState();
-    app.closeModal('signinModal');
-    app.showToast(app.translate('signin-success'));
+export async function handleSignin(app, event) {
+    event.preventDefault();
+    return submitForm(app, 'signinForm', async () => {
+        const body = {
+            email: document.getElementById('signinEmail').value,
+            password: document.getElementById('signinPassword').value,
+            remember: document.getElementById('rememberMe').checked
+        };
+        app.currentUser = await request('/auth/login', { method: 'POST', body });
+        app.showAuthenticatedState();
+        app.closeModal('signinModal');
+        app.showToast(app.translate('signin-success'));
+    });
 }
 
-export function handleSignup(app, e) {
-    e.preventDefault();
-    
-    const nameEl = document.getElementById('signupName');
-    const emailEl = document.getElementById('signupEmail');
-    const passwordEl = document.getElementById('signupPassword');
-    const confirmPasswordEl = document.getElementById('signupConfirmPassword');
-    const agreeTermsEl = document.getElementById('agreeTerms');
-    
-    const name = nameEl ? nameEl.value : '';
-    const email = emailEl ? emailEl.value : '';
-    const password = passwordEl ? passwordEl.value : '';
-    const confirmPassword = confirmPasswordEl ? confirmPasswordEl.value : '';
-    const agreeTerms = agreeTermsEl ? agreeTermsEl.checked : false;
-    
-    // Validation
-    if (!name.trim()) {
-        app.showError('signupError', app.translate('validation-name'));
-        return;
-    }
-    
-    if (!app.validateEmail(email)) {
-        app.showError('signupError', app.translate('validation-email'));
-        return;
-    }
-    
-    if (password.length < 6) {
-        app.showError('signupError', app.translate('validation-password-length'));
-        return;
-    }
-    
-    if (password !== confirmPassword) {
-        app.showError('signupError', app.translate('validation-password-mismatch'));
-        return;
-    }
-    
-    if (!agreeTerms) {
-        app.showError('signupError', app.translate('validation-terms'));
-        return;
-    }
-
-    // Create user
-    const user = { name, email };
-    app.currentUser = user;
-    writeStorage('currentUser', user, sessionStorage);
-    removeStorage('currentUser', localStorage);
-    
-    app.showAuthenticatedState();
-    app.closeModal('signupModal');
-    app.showToast(app.translate('signup-success'));
+export async function handleSignup(app, event) {
+    event.preventDefault();
+    return submitForm(app, 'signupForm', async () => {
+        const password = document.getElementById('signupPassword').value;
+        if (password !== document.getElementById('signupConfirmPassword').value) {
+            app.showError('signupError', app.translate('validation-password-mismatch'));
+            return;
+        }
+        if (!document.getElementById('agreeTerms').checked) {
+            app.showError('signupError', app.translate('validation-terms'));
+            return;
+        }
+        app.currentUser = await request('/auth/register', {
+            method: 'POST', body: { name: document.getElementById('signupName').value,
+                email: document.getElementById('signupEmail').value, password }
+        });
+        app.showAuthenticatedState();
+        app.closeModal('signupModal');
+        app.showToast(app.translate('signup-success'));
+    });
 }
 
-export function signOut(app) {
-    app.currentUser = null;
-    removeStorage('currentUser', localStorage);
-    removeStorage('currentUser', sessionStorage);
-    app.showGuestState();
-    const dropdown = document.getElementById('userDropdown');
-    if (dropdown) {
-        dropdown.classList.add('hidden');
+export async function signOut(app) {
+    try {
+        await request('/auth/logout', { method: 'POST', body: {} });
+        app.currentUser = null;
+        app.showGuestState();
+        document.getElementById('userDropdown')?.classList.add('hidden');
+        app.showToast(app.translate('signout-success'));
+    } catch (error) {
+        app.setDataStatus('error');
     }
-    app.showToast(app.translate('signout-success'));
-}
-
-export function validateEmail(app, email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
 }
 

@@ -1,82 +1,127 @@
-import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { resolve, extname } from 'node:path';
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
-
-// Set PLAYWRIGHT_PACKAGE to use an existing installation, or install Playwright locally.
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'playwright');
-const root = resolve(import.meta.dirname, '..');
-const server = createServer(async (req, res) => {
-    const path = resolve(root, '.' + (req.url === '/' ? '/index.html' : req.url));
-    if (!path.startsWith(root + '/')) { res.writeHead(403).end(); return; }
-    try {
-        const data = await readFile(path);
-        res.setHeader('Content-Type', ({ '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css' })[extname(path)] || 'application/octet-stream');
-        res.end(data);
-    } catch { res.writeHead(404).end(); }
+const base = process.env.BASE_URL || 'http://127.0.0.1:8001';
+const suffix = Date.now();
+const email = 'browser' + suffix + '@example.com';
+const password = 'browser-test-password';
+const browser = await chromium.launch({
+    headless: true, timeout: 15000,
+    ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
 });
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-let browser;
 try {
-    browser = await chromium.launch({
-        headless: true,
-        timeout: 15000,
-        ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
-    });
-    const page = await browser.newPage();
-    page.setDefaultTimeout(10000);
-    console.log('Browser launched');
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    page.setDefaultTimeout(15000);
     const errors = [];
-    page.on('pageerror', error => { errors.push(error.message); console.error('Page error:', error.message); });
-    await page.goto('http://127.0.0.1:' + server.address().port, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    console.log('Page loaded');
-    await page.waitForSelector('#map .leaflet-pane', { state: 'attached' });
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(base, { waitUntil: 'domcontentloaded' });
+    await page.locator('#dataStatus').filter({ hasText: 'जानकारी अपडेट' }).waitFor();
+    await page.locator('#map .leaflet-pane').first().waitFor({ state: 'attached' });
     await page.click('#listViewBtn');
-    assert.equal(await page.locator('.location-card').count(), 10);
+    const baseline = await page.locator('.location-card').count();
+    assert.ok(baseline >= 10);
     await page.click('#langToggle');
     await page.fill('#searchInput', 'Koregaon');
     assert.equal(await page.locator('.location-card').count(), 1);
+    await page.selectOption('#statusFilter', 'closed');
+    assert.equal(await page.locator('.location-card').count(), 0);
+    await page.selectOption('#statusFilter', '');
     await page.fill('#searchInput', '');
-    await page.click('.location-card [data-action="checkin"] >> nth=0');
+    await page.locator('.location-card [data-action="checkin"]').first().click();
     await page.waitForSelector('#signinModal:not(.hidden)');
-    await page.fill('#signinEmail', 'test@example.com');
-    await page.fill('#signinPassword', 'secret');
+    await page.click('#switchToSignup');
+    await page.fill('#signupName', 'Browser Tester');
+    await page.fill('#signupEmail', email);
+    await page.fill('#signupPassword', password);
+    await page.fill('#signupConfirmPassword', password);
+    await page.check('#agreeTerms');
+    await page.click('#signupForm button[type=submit]');
+    await page.locator('#signupModal').waitFor({ state: 'hidden' });
+    let cookie = (await context.cookies()).find(item => item.name === 'bhandaaro_session');
+    assert.ok(cookie.httpOnly && cookie.expires === -1);
+    await page.click('#userProfile');
+    let [logoutResponse] = await Promise.all([
+        page.waitForResponse(response => response.url().endsWith('/api/auth/logout')),
+        page.click('#signoutBtn')
+    ]);
+    assert.equal(logoutResponse.status(), 200);
+    await page.locator('#guestButtons').waitFor({ state: 'visible' });
+    await page.click('#signinBtn');
+    await page.fill('#signinEmail', email);
+    await page.fill('#signinPassword', 'wrong-password');
+    await page.click('#signinForm button[type=submit]');
+    await page.locator('#signinError').filter({ hasText: 'Invalid email or password' }).waitFor();
+    await page.fill('#signinPassword', password);
     await page.check('#rememberMe');
     await page.click('#signinForm button[type=submit]');
-    await page.click('.location-card [data-action="checkin"] >> nth=0');
-    await page.click('[data-rating="5"]');
+    await page.locator('#signinModal').waitFor({ state: 'hidden' });
+    cookie = (await context.cookies()).find(item => item.name === 'bhandaaro_session');
+    assert.ok(cookie.httpOnly && cookie.expires > Date.now() / 1000);
+    const before = Number((await page.locator('#totalCheckins').textContent()).replace(/,/g, ''));
+    await page.locator('.location-card [data-action="checkin"]').first().click();
+    await page.locator('[data-rating="5"]').focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await page.locator('[data-rating="5"]').getAttribute('aria-pressed'), 'true');
     await page.fill('#checkinFeedback', 'Browser regression review');
     await page.click('#checkinForm button[type=submit]');
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.bhandaaras)[0].reviews.at(-1).comment), 'Browser regression review');
+    await page.locator('#checkinModal').waitFor({ state: 'hidden' });
+    assert.equal(Number((await page.locator('#totalCheckins').textContent()).replace(/,/g, '')), before + 1);
     await page.click('#addLocationBtn');
-    await page.waitForSelector('#mapPicker .leaflet-pane', { state: 'attached' });
+    await page.locator('#mapPicker .leaflet-pane').first().waitFor({ state: 'attached' });
     await page.locator('#mapPicker').click({ position: { x: 150, y: 120 } });
-    await page.fill('#locationName', 'Browser test location');
+    await page.fill('#locationName', 'Browser kitchen ' + suffix);
     await page.fill('#locationAddress', 'Confirmed test address');
     await page.selectOption('#locationType', 'daily');
     await page.fill('#locationTimings', '12 PM - 2 PM');
     await page.locator('.day-checkbox input').first().check();
     await page.click('#addLocationForm button[type=submit]');
-    assert.equal(await page.locator('.location-card').count(), 11);
+    await page.locator('#addLocationModal').waitFor({ state: 'hidden' });
+    assert.equal(await page.locator('.location-card').count(), baseline + 1);
     await page.reload();
+    await page.locator('#dataStatus').filter({ hasText: 'Information is up to date.' }).waitFor();
     await page.click('#listViewBtn');
-    assert.equal(await page.locator('.location-card').count(), 11);
+    assert.equal(await page.locator('.location-card').count(), baseline + 1);
+    await page.locator('#userMenu').waitFor({ state: 'visible' });
+    const other = await browser.newContext();
+    const second = await other.newPage();
+    await second.goto(base);
+    await second.locator('#dataStatus').filter({ hasText: 'जानकारी अपडेट' }).waitFor();
+    await second.click('#listViewBtn');
+    await second.fill('#searchInput', 'Browser kitchen ' + suffix);
+    assert.equal(await second.locator('.location-card').count(), 1);
+    assert.equal(await second.locator('#guestButtons').isVisible(), true);
+    await other.close();
     await page.click('#addLocationBtn');
-    await page.waitForSelector('#mapPicker .leaflet-pane', { state: 'attached' });
+    await page.locator('#mapPicker .leaflet-pane').first().waitFor({ state: 'attached' });
     await page.keyboard.press('Escape');
     await page.click('#mapViewBtn');
     await page.locator('.leaflet-interactive').first().click();
     await page.locator('.leaflet-popup [data-action="details"]').click();
-    assert.equal(await page.evaluate(() => typeof window.app), 'undefined');
+    await page.route('**/api/locations', route => route.abort());
+    await page.reload();
+    await page.locator('#dataStatus').filter({ hasText: 'Cannot reach the server' }).waitFor();
+    await page.unroute('**/api/locations');
+    await page.click('#retryLoad');
+    await page.locator('#dataStatus').filter({ hasText: 'Information is up to date.' }).waitFor();
+    await page.click('#userProfile');
+    [logoutResponse] = await Promise.all([
+        page.waitForResponse(response => response.url().endsWith('/api/auth/logout')),
+        page.click('#signoutBtn')
+    ]);
+    assert.equal(logoutResponse.status(), 200);
+    await page.locator('#guestButtons').waitFor({ state: 'visible' });
+    assert.ok(!(await context.cookies()).some(item => item.name === 'bhandaaro_session'));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.click('#listViewBtn');
+    await page.fill('#searchInput', 'Koregaon');
+    assert.equal(await page.locator('.location-card').count(), 1);
+    assert.equal(await page.locator('#listViewBtn').getAttribute('aria-label'), 'List view');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+    assert.equal(overflow, false);
     assert.deepEqual(errors, []);
-    console.log('Browser regression passed: language, filters, delegated actions, authentication, check-in, location creation, reload, picker lifecycle, map popup; no page errors.');
-} catch (error) {
-    console.error(error);
-    process.exitCode = 1;
+    console.log('Full-stack browser test passed: auth, cookies, filters, picker, writes, totals, reload, second session, logout, API failure and retry.');
 } finally {
-    await browser?.close();
-    server.closeAllConnections();
-    await new Promise(resolve => server.close(resolve));
+    await browser.close();
 }

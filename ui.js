@@ -1,6 +1,5 @@
 // Functions receive the application context explicitly; app.js owns shared state.
 import { readStorage, writeStorage } from './storage.js';
-import { calculateStats } from './locations.js';
 
 export function loadLanguagePreference(app) {
     const savedLanguage = readStorage('preferredLanguage', null, localStorage, false);
@@ -25,6 +24,7 @@ export function toggleLanguage(app) {
     app.renderLocations(); // Re-render to apply translations
     app.renderActivityFeed(); // Re-render activity feed
     app.addMarkers(); // Re-render map markers
+    if (app.dataStatus) app.setDataStatus(app.dataStatus);
 }
 
 export function translate(app, key) {
@@ -32,6 +32,7 @@ export function translate(app, key) {
 }
 
 export function applyTranslations(app) {
+    document.documentElement?.setAttribute('lang', app.currentLanguage);
     // Translate all elements with data-key attributes
     document.querySelectorAll('[data-key]').forEach(element => {
         const key = element.getAttribute('data-key');
@@ -133,6 +134,7 @@ export function createPopupContent(app, location) {
 export function bindEvents(app) {
     if (app.eventsBound) return;
     app.eventsBound = true;
+    document.getElementById('retryLoad')?.addEventListener('click', () => app.reload());
 
     document.addEventListener('click', event => {
         const action = event.target.closest('[data-action]');
@@ -200,6 +202,12 @@ export function bindEvents(app) {
     // Rating stars
     document.querySelectorAll('.rating-stars i').forEach(star => {
         star.addEventListener('click', (e) => app.setRating(parseInt(e.target.dataset.rating)));
+        star.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                app.setRating(Number(star.dataset.rating));
+            }
+        });
         star.addEventListener('mouseenter', (e) => app.highlightRating(parseInt(e.target.dataset.rating)));
     });
 
@@ -348,6 +356,7 @@ export function resetRatingHighlight(app) {
 
 export function updateRatingDisplay(app, rating) {
     document.querySelectorAll('.rating-stars i').forEach((star, index) => {
+        star.setAttribute('aria-pressed', index < rating ? 'true' : 'false');
         if (index < rating) {
             star.classList.add('active');
         } else {
@@ -481,14 +490,14 @@ export function renderActivityFeed(app) {
 }
 
 export function updateStats(app) {
-    const { activeToday: activeCount, checkinsToday, totalCheckins } = calculateStats(app.bhandaaras);
+    const { activeToday: activeCount, checkinsToday, totalCheckins } = app.stats;
     
     const totalLocationsEl = document.getElementById('totalLocations');
     const activeTodayEl = document.getElementById('activeToday');
     const checkinsTodayEl = document.getElementById('checkinsToday');
     const totalCheckinsEl = document.getElementById('totalCheckins');
 
-    if (totalLocationsEl) totalLocationsEl.textContent = app.bhandaaras.length;
+    if (totalLocationsEl) totalLocationsEl.textContent = app.stats.totalLocations;
     if (activeTodayEl) activeTodayEl.textContent = activeCount;
     if (checkinsTodayEl) checkinsTodayEl.textContent = checkinsToday.toLocaleString();
     if (totalCheckinsEl) totalCheckinsEl.textContent = totalCheckins.toLocaleString();

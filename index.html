@@ -81,10 +81,10 @@
                         <span data-key="add-location-btn">नया स्थान जोड़ें</span>
                     </button>
                     <div class="view-toggle">
-                        <button class="view-btn active" id="mapViewBtn">
+                        <button class="view-btn active" id="mapViewBtn" aria-label="Map view">
                             <i class="fas fa-map"></i>
                         </button>
-                        <button class="view-btn" id="listViewBtn">
+                        <button class="view-btn" id="listViewBtn" aria-label="List view">
                             <i class="fas fa-list"></i>
                         </button>
                     </div>
@@ -95,6 +95,11 @@
 
     <!-- Main Content -->
     <main class="main-content">
+        <div class="container" aria-live="polite">
+            <p id="dataStatus" role="status"></p>
+            <button id="retryLoad" class="btn hidden" data-key="api-retry">Retry</button>
+            <p data-key="demo-notice">Some listings and reviews are demonstration data, not verified meal availability.</p>
+        </div>
         <div class="container">
             <div class="content-grid">
                 <!-- Map View -->
@@ -103,11 +108,11 @@
                         <div id="map"></div>
                         <div class="map-stats">
                             <div class="stat-item">
-                                <span class="stat-number" id="totalLocations">89</span>
+                                <span class="stat-number" id="totalLocations">0</span>
                                 <span class="stat-label" data-key="total-locations">कुल स्थान</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-number active" id="activeToday">17</span>
+                                <span class="stat-number active" id="activeToday">0</span>
                                 <span class="stat-label" data-key="open-today">आज खुले</span>
                             </div>
                         </div>
@@ -130,11 +135,11 @@
                     <div class="activity-stats">
                         <div class="stat-row">
                             <span data-key="checkins-today">आज चेक-इन:</span>
-                            <span class="stat-value" id="checkinsToday">447</span>
+                            <span class="stat-value" id="checkinsToday">0</span>
                         </div>
                         <div class="stat-row">
                             <span data-key="total-checkins">कुल चेक-इन:</span>
-                            <span class="stat-value" id="totalCheckins">23,567</span>
+                            <span class="stat-value" id="totalCheckins">0</span>
                         </div>
                     </div>
                 </div>
@@ -197,7 +202,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label" data-key="password-label">पासवर्ड</label>
-                    <input type="password" class="form-control" id="signupPassword" required>
+                    <input type="password" class="form-control" id="signupPassword" minlength="8" maxlength="128" autocomplete="new-password" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label" data-key="confirm-password-label">पासवर्ड की पुष्टि करें</label>
@@ -331,11 +336,11 @@
                 <div class="form-group">
                     <label class="form-label" data-key="rating-label">रेटिंग</label>
                     <div class="rating-stars">
-                        <i class="fas fa-star" data-rating="1"></i>
-                        <i class="fas fa-star" data-rating="2"></i>
-                        <i class="fas fa-star" data-rating="3"></i>
-                        <i class="fas fa-star" data-rating="4"></i>
-                        <i class="fas fa-star" data-rating="5"></i>
+                        <i class="fas fa-star" data-rating="1" role="button" tabindex="0" aria-label="1 / 5" aria-pressed="false"></i>
+                        <i class="fas fa-star" data-rating="2" role="button" tabindex="0" aria-label="2 / 5" aria-pressed="false"></i>
+                        <i class="fas fa-star" data-rating="3" role="button" tabindex="0" aria-label="3 / 5" aria-pressed="false"></i>
+                        <i class="fas fa-star" data-rating="4" role="button" tabindex="0" aria-label="4 / 5" aria-pressed="false"></i>
+                        <i class="fas fa-star" data-rating="5" role="button" tabindex="0" aria-label="5 / 5" aria-pressed="false"></i>
                     </div>
                 </div>
                 <div class="error-message hidden" id="checkinError"></div>

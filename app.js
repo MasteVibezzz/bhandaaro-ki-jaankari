@@ -1,5 +1,5 @@
 import translations from './translations.js';
-import { createDemoData } from './demo-data.js';
+import { request } from './api.js';
 import * as locations from './locations.js';
 import * as auth from './auth.js';
 import * as maps from './map.js';
@@ -21,19 +21,16 @@ export class BhandaaraApp {
         
         // Language translations
         this.translations = translations;
-        const { bhandaaras, recentActivity, stats } = createDemoData();
-        this.bhandaaras = bhandaaras;
-        this.recentActivity = recentActivity;
-        this.stats = stats;
+        this.bhandaaras = [];
+        this.recentActivity = [];
+        this.stats = { totalLocations: 0, activeToday: 0, totalCheckins: 0, checkinsToday: 0 };
         this.init();
     }
 
-    init() {
+    async init() {
         if (this.initialized) return;
         this.initialized = true;
-        this.loadStoredData();
         this.loadLanguagePreference();
-        this.checkAuthState();
         this.initializeMap();
         this.bindEvents();
         maps.bindViewportEvents(this);
@@ -42,28 +39,54 @@ export class BhandaaraApp {
         this.updateStats();
         this.applyTranslations();
         this.setInitialView();
+        await this.reload();
+    }
+
+    async reload() {
+        this.setDataStatus('loading');
+        try {
+            await Promise.all([this.checkAuthState(), this.refreshData()]);
+            this.setDataStatus('ready');
+        } catch (error) {
+            this.setDataStatus('error');
+        }
+    }
+
+    async refreshData() {
+        const [locations, activity, stats] = await Promise.all([
+            request('/locations'), request('/activity'), request('/stats')
+        ]);
+        this.bhandaaras = locations;
+        this.recentActivity = activity;
+        this.stats = stats;
+        this.renderLocations();
+        this.renderActivityFeed();
+        this.updateStats();
+        this.addMarkers();
+    }
+
+    setDataStatus(status) {
+        this.dataStatus = status;
+        const label = document.getElementById('dataStatus');
+        label.textContent = this.translate(status === 'loading' ? 'api-loading' : status === 'error' ? 'api-unavailable' : 'api-ready');
+        label.setAttribute('role', status === 'error' ? 'alert' : 'status');
+        document.getElementById('retryLoad').classList.toggle('hidden', status !== 'error');
     }
 
     setInitialView() {
         // Ensure we start with the map view properly set
         this.switchView('map');
     }
-    loadStoredData(...args) { return locations.loadStoredData(this, ...args); }
-    normalizeLocation(...args) { return locations.normalizeLocation(this, ...args); }
-    deduplicateLocations(...args) { return locations.deduplicateLocations(this, ...args); }
-    deduplicateActivity(...args) { return locations.deduplicateActivity(this, ...args); }
     openAddLocation(...args) { return locations.openAddLocation(this, ...args); }
     handleAddLocation(...args) { return locations.handleAddLocation(this, ...args); }
     openCheckinModal(...args) { return locations.openCheckinModal(this, ...args); }
     handleCheckin(...args) { return locations.handleCheckin(this, ...args); }
     filterLocations(...args) { return locations.filterLocations(this, ...args); }
     getFilteredLocations(...args) { return locations.getFilteredLocations(this, ...args); }
-    saveToStorage(...args) { return locations.saveToStorage(this, ...args); }
     checkAuthState(...args) { return auth.checkAuthState(this, ...args); }
     handleSignin(...args) { return auth.handleSignin(this, ...args); }
     handleSignup(...args) { return auth.handleSignup(this, ...args); }
     signOut(...args) { return auth.signOut(this, ...args); }
-    validateEmail(...args) { return auth.validateEmail(this, ...args); }
     initializeMap(...args) { return maps.initializeMap(this, ...args); }
     initializeMapPicker(...args) { return maps.initializeMapPicker(this, ...args); }
     addMarkers(...args) { return maps.addMarkers(this, ...args); }

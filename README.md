@@ -1,122 +1,176 @@
 # Bhandaaro Ki Jaankari
 ### भंडारों की जानकारी
 
-A community-driven platform for discovering and sharing Bhandaara, Langar, Prasadam, and other free-food locations in Pune, India.
+A bilingual map-based community food directory for Pune, with a FastAPI backend and PostgreSQL database.
 
-## Motivation
+## Current status
 
-Information about free community meals is often shared through word of mouth, posters, or local groups. Bhandaaro Ki Jaankari explores how a bilingual, map-based interface can bring that information together and make it easier to find nearby meal locations.
+This is a local full-stack development version. Users can register and sign in, add locations,
+and submit check-ins with ratings and reviews. Data is shared between browser sessions through PostgreSQL.
+Passwords use Argon2 hashing; login uses revocable HttpOnly cookie sessions. Browser storage holds
+only the language preference. Old browser-only prototype data remains untouched and is not imported.
 
-## Project status
+The ten optional seed listings, forty seed reviews, counters and activity include demonstration data.
+Meal schedules and opening status are not verified in real time. Live verification, moderation,
+password recovery, email verification and production hosting are future work.
 
-**The current version is a frontend prototype.** It demonstrates the interface and user journeys for a future community platform.
+## Quick start with Docker Desktop
 
-- Location listings, reviews, availability indicators, and community statistics include seeded demonstration data.
-- Added locations and selected user/activity state use browser `localStorage`; there is no shared database or cross-device synchronization.
-- Sign-up and sign-in are simulated client-side flows, not real authentication.
-- Ratings, reviews, and check-ins demonstrate the intended experience; they are not a verified, live community service.
-
-A backend, persistent database, and real authentication are planned. The prototype's meal listings and opening status should not be treated as verified real-time information.
-
-## Features
-
-The prototype includes:
-
-- **Map and list views** for exploring free-food locations in Pune.
-- **Search** by location name or address.
-- **Filters** for daily, regular, and festival locations, plus displayed availability.
-- **Hindi and English** interface switching.
-- **Add-location form** with a map-based coordinate picker and local browser storage.
-- **Community check-in flow** with feedback and a rating selector.
-- **Sample ratings, reviews, activity feed, and statistics.**
-- **Sign-up and sign-in interfaces** demonstrating account-related journeys.
-- **Responsive layouts** and styles that support system dark-mode preferences.
-
-## Tech stack
-
-| Technology | Purpose |
-| --- | --- |
-| HTML5 | Page structure and forms |
-| CSS3 | Styling, responsive layouts, and color themes |
-| JavaScript | Interface behavior and client-side state |
-| Leaflet.js | Interactive maps and location selection |
-| OpenStreetMap | Map tiles |
-| Font Awesome | Interface icons |
-| Browser localStorage | Local prototype data and user state |
-
-There is no build system, backend service, or package installation requirement in the current version.
-
-Run the automated regression checks with Node.js 22 or newer using `npm test`.
-For browser checks, install Playwright separately and run `node tests/browser.mjs`.
-The browser suite uses Chromium by default; `CHROME_PATH` can select an installed Chrome executable.
-It requires internet access for Leaflet and map tiles.
-
-The application context in `app.js` owns shared state. Modules receive it explicitly:
-`locations.js` handles data workflows, `auth.js` handles prototype sessions,
-`map.js` owns Leaflet lifecycle, and `ui.js` handles rendering and DOM events.
-Generated cards and popups use delegated data attributes rather than global handlers.
-
-## Running locally
-
-### Prerequisites
-
-- A modern web browser.
-- Git, if cloning the repository.
-- An internet connection for CDN-hosted libraries, icons, and map tiles.
-
-### Setup
-
-Clone the repository and enter its directory:
+Start Docker Desktop, then from this repository:
 
 ```bash
-git clone https://github.com/MasteVibezzz/bhandaaro-ki-jaankari.git
-cd bhandaaro-ki-jaankari
+docker compose up -d --build
+docker compose exec api python -m backend.app.seed
 ```
 
-Serve the folder over HTTP. Native ES modules require this instead of opening `index.html` directly. No API keys or environment variables are required. With Python 3 installed:
+Open [http://localhost:8000](http://localhost:8000).
+API documentation: [http://localhost:8000/docs](http://localhost:8000/docs).
+Liveness: `/health`; database readiness: `/health/ready`.
+
+The seed command is optional and safe to repeat; it does not reset existing data.
+The API and database bind to localhost only. PostgreSQL uses host port 5433; the app uses 8000.
+An internet connection is needed for the first image download, CDN libraries, icons and map tiles.
 
 ```bash
-python3 -m http.server 8000
+docker compose ps
+docker compose logs --tail=50 api
+docker compose stop
+docker compose start
 ```
 
-Then visit [http://localhost:8000](http://localhost:8000).
+The named `postgres-data` volume retains records across container restarts.
+Do not remove that volume if you want to retain your local data.
 
-Prototype data saved in localStorage belongs to that browser and origin. Clearing site storage removes locally saved data.
+## Configuration
 
-## Project structure
+Compose has local-development defaults. Copy `.env.example` to `.env` if customizing:
+`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `ALLOWED_ORIGINS`, `COOKIE_SECURE`.
+Keep `.env` private. Changing database credentials after the volume is initialized
+also requires changing the database role; environment values do not reset an existing volume.
+
+`DATABASE_URL` is used by a host-run Python process. Compose provides the container URL separately.
+The default password is solely for this localhost development stack.
+For HTTPS, enable `COOKIE_SECURE=true` and set the exact permitted browser origin.
+The frontend uses relative `/api` calls from the same FastAPI origin.
+Opening `index.html` or using a standalone static server no longer starts a working full-stack app.
+
+## Optional: host-run Python development
+
+Docker's API uses Python 3.12. The implementation is also tested with the existing macOS Python 3.9.
+For a new host environment, use Python 3.12+:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+docker compose up -d db
+.venv/bin/alembic -c backend/alembic.ini upgrade head
+.venv/bin/python -m backend.app.seed
+.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Run either the host API or the Docker API on port 8000 at a time.
+If the Docker API is already running, stop it with `docker compose stop api` first.
+To load a customized `.env` with Uvicorn, add `--env-file .env`.
+For migration commands with customized configuration, export `DATABASE_URL` in your shell.
+
+## Migrations
+
+```bash
+docker compose exec api alembic -c backend/alembic.ini upgrade head
+docker compose exec api alembic -c backend/alembic.ini current
+docker compose exec api alembic -c backend/alembic.ini check
+```
+
+Schema changes use committed Alembic revisions. Never reset development data to apply a migration.
+The tests verify upgrade → downgrade → upgrade in a dedicated test database.
+
+## Tests
+
+JavaScript checks require Node.js 22+:
+
+```bash
+npm test
+```
+
+Create the isolated test databases once (an "already exists" message on later runs is harmless):
+
+```bash
+docker compose exec db createdb -U bhandaaro bhandaaro_test
+docker compose exec db createdb -U bhandaaro bhandaaro_browser_test
+```
+
+For custom database roles, replace `bhandaaro` with your configured user.
+Run PostgreSQL-backed API tests inside the Docker runtime:
+
+```bash
+docker compose exec -e TEST_DATABASE_URL=postgresql+psycopg://bhandaaro:local-development-only@db:5432/bhandaaro_test api python -m pytest backend/app/tests -q
+```
+
+Or use the host environment: `.venv/bin/python -m pytest backend/app/tests -q`.
+Override `TEST_DATABASE_URL` for custom credentials. The suite refuses to reset any database
+whose name does not end in `_test`. It truncates only the selected test database.
+
+For the real browser suite:
+
+```bash
+docker compose --profile test up -d --wait browser-test
+npm ci
+npx playwright install chromium
+npm run test:browser
+docker compose --profile test stop browser-test
+```
+
+The browser stack is isolated on port 8001 with its own database.
+The GitHub Actions workflow repeats API, migration, JavaScript and browser checks for pull requests.
+It covers registration/login/logout, Remember Me cookies, API data, filters, map/picker,
+check-ins/reviews, new locations, reload, second browser context, and API failure/retry.
+It creates uniquely named test accounts and locations in that test database.
+`CHROME_PATH` can select an existing Chrome executable; `PLAYWRIGHT_PACKAGE`
+can point to an existing Playwright installation. `BASE_URL` overrides the default test URL.
+
+## Architecture
 
 ```text
-bhandaaro-ki-jaankari/
-├── index.html   # Page layout and forms
-├── style.css    # Styling and responsive layouts
-├── app.js       # Initialization and shared application context
-├── locations.js # Locations, reviews, filtering and persistence workflows
-├── auth.js      # Prototype authentication
-├── map.js       # Leaflet maps, markers and viewport handling
-├── ui.js        # Rendering, translations, modals and delegated events
-├── demo-data.js # Fresh seed data for each application instance
-├── translations.js # Hindi and English dictionaries
-├── storage.js   # Resilient browser storage helpers
-├── tests/       # Automated regression checks
-└── README.md    # Project documentation
+app.js             Shared frontend state and startup
+api.js             Credentialed requests, submission locks and retry keys
+locations.js       API-backed location and check-in workflows
+auth.js            Registration, login, logout, session restoration
+ui.js              Rendering, translations and delegated DOM events
+map.js             Leaflet main map and coordinate picker lifecycle
+translations.js    Hindi and English dictionaries
+storage.js         Language preference persistence
+backend/
+  app/
+    main.py        App setup, origin protection, errors and static assets
+    config.py      Environment settings
+    database.py    SQLAlchemy connection/session management
+    models/        Tables and constraints
+    schemas/       Validated write payloads
+    routers/       Auth and community API endpoints
+    services/      Authentication and aggregate/serialization logic
+    seed.py        Explicit repeatable development seeding
+    tests/         PostgreSQL integration tests
+  alembic/         Versioned database migrations
+  Dockerfile
+  requirements.txt
+compose.yaml       Local API, PostgreSQL and optional browser-test stack
+docs/backend-contract.md
 ```
 
-## Development roadmap
+The original `demo-data.js` is retained as the reference fixture. The live frontend never loads it.
+The backend seed fixture is `backend/demo-data.json`.
+Detailed endpoint and transaction behavior is in [the backend contract](docs/backend-contract.md).
 
-The following items are planned improvements, not completed features:
+## Behavior and remaining work
 
-- [ ] Introduce a REST API for locations, reviews, and check-ins.
-- [ ] Add a persistent database and shared data across users and devices.
-- [ ] Replace simulated account flows with secure authentication and authorization.
-- [ ] Connect rating and review submissions to persistent records.
-- [ ] Add community verification, moderation, and reporting for location information.
-- [ ] Improve meal schedules, availability updates, and location accuracy.
-- [x] Organize the application into maintainable modules.
-- [ ] Add automated tests, accessibility checks, and validation.
-- [ ] Publish a hosted demo with screenshots and deployment documentation.
-
-## Author
+- One check-in per user, location and Asia/Kolkata calendar day.
+- Check-in, review and activity commit together; standalone reviews do not increment check-in counts.
+- Write idempotency keys make retries safe, including concurrent identical requests.
+- Remember Me uses a 30-day cookie; unchecked login uses a session cookie with a one-day server expiry.
+- Sign-out revokes the current server session. No authentication token is stored in browser storage.
+- New locations use your confirmed address and coordinates. There is no live geocoding service.
+- Availability remains a displayed assertion rather than a computation from free-text opening hours.
+- A process-local rate limit supports this single-instance local stack. Shared rate limiting,
+  email verification/recovery, moderation, backups and production deployment remain planned.
 
 Created by **Manit Bhatia** — [@MasteVibezzz](https://github.com/MasteVibezzz).
-
-This project explores frontend development, interactive maps, bilingual interfaces, and technology for community needs.

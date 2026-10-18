@@ -1,0 +1,49 @@
+name: Full-stack checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: bhandaaro_test
+          POSTGRES_USER: bhandaaro
+          POSTGRES_PASSWORD: local-development-only
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U bhandaaro -d bhandaaro_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://bhandaaro:local-development-only@127.0.0.1:5433/bhandaaro_test
+      TEST_DATABASE_URL: postgresql+psycopg://bhandaaro:local-development-only@127.0.0.1:5433/bhandaaro_test
+      ALLOWED_ORIGINS: http://127.0.0.1:8001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: pip install -r backend/requirements.txt
+      - run: npm ci
+      - run: python -m pytest -q
+        env:
+          ALLOWED_ORIGINS: http://localhost:8000
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - name: Full-stack browser
+        run: |
+          python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8001 &
+          curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:8001/health/ready
+          npm run test:browser
