@@ -2,7 +2,7 @@ import translations from './translations.js';
 import { request } from './api.js';
 import * as locations from './locations.js';
 import * as auth from './auth.js';
-import * as maps from './map.js';
+import * as maps from './map.js?v=osm-policy-1';
 import * as ui from './ui.js';
 
 // One context owns data, selections and Leaflet instances. Modules receive it explicitly.

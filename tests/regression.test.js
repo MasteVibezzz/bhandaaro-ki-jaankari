@@ -125,3 +125,34 @@ test('statistics render server totals rather than a filtered client subset', () 
     assert.equal(element('totalLocations').textContent, 11);
     assert.equal(element('activeToday').textContent, 7);
 });
+
+test('both maps use identifiable, conservative OSM layers with visible attribution', () => {
+    const { app } = context();
+    const layers = [];
+    const configs = [];
+    globalThis.L = {
+        map(id, options) {
+            configs.push({ id, options });
+            return { setView() { return this; }, on() {} };
+        },
+        tileLayer(url, options) {
+            layers.push({ url, options });
+            return { addTo() {} };
+        }
+    };
+    app.initializeMap();
+    app.initializeMap();
+    app.initializeMapPicker();
+    app.initializeMapPicker();
+    assert.equal(layers.length, 2);
+    assert.equal(configs.length, 2);
+    for (const { options } of configs) assert.equal(options.attributionControl, true);
+    for (const { url, options } of layers) {
+        assert.equal(url, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
+        assert.equal(options.referrerPolicy, 'strict-origin-when-cross-origin');
+        assert.ok(options.attribution.includes('https://www.openstreetmap.org/copyright'));
+        assert.equal(options.updateWhenIdle, true);
+        assert.equal(options.updateWhenZooming, false);
+        assert.equal(options.keepBuffer, 1);
+    }
+});

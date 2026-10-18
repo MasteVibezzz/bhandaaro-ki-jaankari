@@ -125,6 +125,8 @@ The GitHub Actions workflow repeats API, migration, JavaScript and browser check
 It covers registration/login/logout, Remember Me cookies, API data, filters, map/picker,
 check-ins/reviews, new locations, reload, second browser context, and API failure/retry.
 It creates uniquely named test accounts and locations in that test database.
+Automated browser tests serve local tile fixtures and verify the outgoing Referer and
+attribution in both maps. They do not fetch OSM's community-hosted tiles.
 `CHROME_PATH` can select an existing Chrome executable; `PLAYWRIGHT_PACKAGE`
 can point to an existing Playwright installation. `BASE_URL` overrides the default test URL.
 
@@ -170,6 +172,10 @@ Detailed endpoint and transaction behavior is in [the backend contract](docs/bac
 - Sign-out revokes the current server session. No authentication token is stored in browser storage.
 - New locations use your confirmed address and coordinates. There is no live geocoding service.
 - Availability remains a displayed assertion rather than a computation from free-text opening hours.
+- Both maps use OSM's documented HTTPS tile endpoint with visible linked attribution,
+  a cross-origin Referer, and normal browser caching. Do not override the page/layer
+  referrer policy with `same-origin` or `no-referrer`, bypass tile caches, prefetch
+  regions, or automatically retry blocked tiles. See [the OSM tile policy](https://operations.osmfoundation.org/policies/tiles/).
 - A process-local rate limit supports this single-instance local stack. Shared rate limiting,
   email verification/recovery, moderation, backups and production deployment remain planned.
 

@@ -1,4 +1,17 @@
 // Functions receive the application context explicitly; app.js owns shared state.
+const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+function addBaseLayer(map) {
+    return L.tileLayer(TILE_URL, {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 18,
+        referrerPolicy: 'strict-origin-when-cross-origin',
+        updateWhenIdle: true,
+        updateWhenZooming: false,
+        keepBuffer: 1
+    }).addTo(map);
+}
+
 export function destroyMapPicker(app) {
     if (app.mapPicker) app.mapPicker.remove();
     app.mapPicker = null;
@@ -9,7 +22,7 @@ export function destroyMapPicker(app) {
 export function initializeMap(app) {
     // Main map - with responsive handling
     const mapElement = document.getElementById('map');
-    if (!mapElement) return;
+    if (!mapElement || app.map) return;
 
     app.map = L.map('map', {
         zoomControl: true,
@@ -17,10 +30,7 @@ export function initializeMap(app) {
         scrollWheelZoom: 'center'
     }).setView([18.5204, 73.8567], 12);
     
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 18
-    }).addTo(app.map);
+    addBaseLayer(app.map);
 
     app.addMarkers();
 }
@@ -33,13 +43,10 @@ export function initializeMapPicker(app) {
     try {
         app.mapPicker = L.map('mapPicker', {
             zoomControl: true,
-            attributionControl: false
+            attributionControl: true
         }).setView([18.5204, 73.8567], 12);
         
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 18
-        }).addTo(app.mapPicker);
+        addBaseLayer(app.mapPicker);
 
         app.mapPicker.on('click', (e) => {
             app.selectLocation(e.latlng);

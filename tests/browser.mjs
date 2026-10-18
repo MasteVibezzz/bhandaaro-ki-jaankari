@@ -6,19 +6,34 @@ const base = process.env.BASE_URL || 'http://127.0.0.1:8001';
 const suffix = Date.now();
 const email = 'browser' + suffix + '@example.com';
 const password = 'browser-test-password';
+const tileRequests = [];
+async function fixtureMapTiles(context) {
+    // Never repeatedly fetch community-hosted map tiles in automated regression runs.
+    await context.route(/^https:\/\/(?:[a-z]\.)?tile\.openstreetmap\.org\//, async route => {
+        const headers = await route.request().allHeaders();
+        tileRequests.push({ url: route.request().url(), referer: headers.referer });
+        await route.fulfill({
+            status: 200, contentType: 'image/svg+xml',
+            body: '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#edf1ed"/></svg>'
+        });
+    });
+}
 const browser = await chromium.launch({
     headless: true, timeout: 15000,
     ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
 });
 try {
     const context = await browser.newContext();
+    await fixtureMapTiles(context);
     const page = await context.newPage();
     page.setDefaultTimeout(15000);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.goto(base, { waitUntil: 'domcontentloaded' });
+    const initialResponse = await page.goto(base, { waitUntil: 'domcontentloaded' });
+    assert.equal(initialResponse.headers()['referrer-policy'], 'strict-origin-when-cross-origin');
     await page.locator('#dataStatus').filter({ hasText: 'जानकारी अपडेट' }).waitFor();
     await page.locator('#map .leaflet-pane').first().waitFor({ state: 'attached' });
+    await page.locator('#map .leaflet-control-attribution a[href="https://www.openstreetmap.org/copyright"]').waitFor();
     await page.click('#listViewBtn');
     const baseline = await page.locator('.location-card').count();
     assert.ok(baseline >= 10);
@@ -70,6 +85,7 @@ try {
     assert.equal(Number((await page.locator('#totalCheckins').textContent()).replace(/,/g, '')), before + 1);
     await page.click('#addLocationBtn');
     await page.locator('#mapPicker .leaflet-pane').first().waitFor({ state: 'attached' });
+    await page.locator('#mapPicker .leaflet-control-attribution a[href="https://www.openstreetmap.org/copyright"]').waitFor();
     await page.locator('#mapPicker').click({ position: { x: 150, y: 120 } });
     await page.fill('#locationName', 'Browser kitchen ' + suffix);
     await page.fill('#locationAddress', 'Confirmed test address');
@@ -85,6 +101,7 @@ try {
     assert.equal(await page.locator('.location-card').count(), baseline + 1);
     await page.locator('#userMenu').waitFor({ state: 'visible' });
     const other = await browser.newContext();
+    await fixtureMapTiles(other);
     const second = await other.newPage();
     await second.goto(base);
     await second.locator('#dataStatus').filter({ hasText: 'जानकारी अपडेट' }).waitFor();
@@ -120,6 +137,11 @@ try {
     assert.equal(await page.locator('#listViewBtn').getAttribute('aria-label'), 'List view');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
     assert.equal(overflow, false);
+    assert.ok(tileRequests.length > 0);
+    for (const tile of tileRequests) {
+        assert.equal(new URL(tile.url).hostname, 'tile.openstreetmap.org');
+        assert.equal(tile.referer, new URL(base).origin + '/');
+    }
     assert.deepEqual(errors, []);
     console.log('Full-stack browser test passed: auth, cookies, filters, picker, writes, totals, reload, second session, logout, API failure and retry.');
 } finally {

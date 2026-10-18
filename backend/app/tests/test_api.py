@@ -33,6 +33,19 @@ def test_health_readiness_seed_repeat_filters(client):
     assert stats["checkinsToday"] == 447
 
 
+def test_map_referrer_policy_does_not_disable_cross_origin_identification(client):
+    response = client.get("/")
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert '<meta name="referrer" content="strict-origin-when-cross-origin">' in response.text
+    # Revalidate app assets, while external tiles keep their own browser cache.
+    assert response.headers["cache-control"] == "no-cache"
+    assert "no-cache" not in response.headers.get("pragma", "")
+    assert client.get("/map.js").headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert client.get("/map.js").headers["cache-control"] == "no-cache"
+    # Sensitive API responses remain uncached independently of public map tiles.
+    assert client.get("/api/locations").headers["cache-control"] == "no-store"
+
+
 def test_real_auth_cookie_hashing_logout_expiration(client, account):
     cookie = client.cookies.get("bhandaaro_session")
     assert cookie

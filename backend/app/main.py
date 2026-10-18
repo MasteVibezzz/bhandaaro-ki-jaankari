@@ -54,7 +54,8 @@ async def protect_writes(request: Request, call_next):
             return error(429, "Too many requests. Try again in a minute.")
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "same-origin"
+    # OSM tiles are cross-origin and require the real website Referer.
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
     return response
@@ -89,7 +90,7 @@ def ready(db: Session = Depends(get_db)):
 
 @app.get("/", include_in_schema=False)
 def frontend():
-    return FileResponse(ROOT / "index.html")
+    return FileResponse(ROOT / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 # Serve only application assets; never mount the repository (contains .env/.venv).
@@ -101,4 +102,6 @@ ASSETS = {"app.js", "api.js", "auth.js", "locations.js", "map.js", "ui.js", "sto
 def asset_file(asset: str):
     if asset not in ASSETS:
         raise HTTPException(404, "Not found")
-    return FileResponse(ROOT / asset)
+    # Revalidate our unbundled app code after updates. This does not affect OSM's
+    # image requests, which go directly from the browser to the tile server.
+    return FileResponse(ROOT / asset, headers={"Cache-Control": "no-cache"})
