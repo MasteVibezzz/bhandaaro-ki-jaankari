@@ -40,6 +40,27 @@ export class BhandaaraApp {
         this.applyTranslations();
         this.setInitialView();
         await this.reload();
+        // Refresh event boundaries while a page stays open, including after tab suspension.
+        const refreshEventBoundaries = () => {
+            let changed = false;
+            for (const location of this.bhandaaras) {
+                const status = locations.eventStatus(location);
+                if (status && status !== location.eventStatus) {
+                    location.eventStatus = status;
+                    location.todayOpen = status === 'serving';
+                    changed = true;
+                }
+            }
+            if (!changed) return;
+            this.renderLocations();
+            this.addMarkers();
+            this.stats.activeToday = this.bhandaaras.filter(location => location.scheduleKind === 'one_time'
+                ? Date.now() >= Date.parse(location.startsAt) && Date.now() < Date.parse(location.endsAt)
+                : location.todayOpen).length;
+            this.updateStats();
+        };
+        setInterval(refreshEventBoundaries, 1000);
+        document.addEventListener('visibilitychange', refreshEventBoundaries);
     }
 
     async reload() {
@@ -54,7 +75,7 @@ export class BhandaaraApp {
 
     async refreshData() {
         const [locations, activity, stats] = await Promise.all([
-            request('/locations'), request('/activity'), request('/stats')
+            request('/locations?include_ended=true'), request('/activity'), request('/stats')
         ]);
         this.bhandaaras = locations;
         this.recentActivity = activity;

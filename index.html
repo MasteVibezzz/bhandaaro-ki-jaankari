@@ -75,6 +75,7 @@
                         <option value="active" data-key="filter-open">खुला</option>
                         <option value="closed" data-key="filter-closed">बंद</option>
                     </select>
+                    <label><input type="checkbox" id="showEnded"> <span data-key="show-ended">समाप्त आयोजन दिखाएँ</span></label>
                 </div>
                 <div class="action-buttons">
                     <button class="btn btn--primary" id="addLocationBtn">
@@ -260,10 +261,28 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            <label for="scheduleKind" class="form-label" data-key="schedule-label">आयोजन</label>
+                            <select id="scheduleKind" class="form-control">
+                                <option value="recurring" data-key="schedule-recurring">नियमित स्थान</option>
+                                <option value="one_time" data-key="schedule-one-time">एक बार का भंडारा</option>
+                            </select>
+                        </div>
+                        <div id="eventFields" class="hidden">
+                            <p class="form-help" data-key="event-time-help">दोनों तारीखें और समय भारत के समय (IST) में हैं।</p>
+                            <div class="form-group">
+                                <label for="eventStart" class="form-label" data-key="event-start">शुरू होने की तारीख और समय</label>
+                                <input id="eventStart" type="datetime-local" class="form-control" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label for="eventEnd" class="form-label" data-key="event-end">समाप्त होने की तारीख और समय</label>
+                                <input id="eventEnd" type="datetime-local" class="form-control" disabled>
+                            </div>
+                        </div>
+                        <div class="form-group" id="recurringTimings">
                             <label class="form-label" data-key="timings-label">समय</label>
                             <input type="text" class="form-control" id="locationTimings" data-placeholder="timings-placeholder" required>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" id="recurringDays">
                             <label class="form-label" data-key="days-label">दिन</label>
                             <div class="days-selection">
                                 <label class="day-checkbox">

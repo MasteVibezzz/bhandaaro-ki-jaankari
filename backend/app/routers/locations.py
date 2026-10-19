@@ -1,5 +1,6 @@
 import hashlib
 import json
+from datetime import timezone
 from typing import Optional, Literal
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select, text
@@ -9,7 +10,7 @@ from ..database import get_db
 from ..models import User, Location, Review, Checkin, Activity, WriteRequest
 from ..schemas import LocationCreate, ReviewCreate
 from ..services.security import session_user
-from ..services.locations import identity, serialize_location, serialize_activity, record_activity, today
+from ..services.locations import identity, serialize_location, serialize_activity, record_activity, today, event_status
 
 router = APIRouter(prefix="/api", tags=["community"])
 
@@ -45,7 +46,7 @@ def idempotent_write(db, user, key, operation, payload, action):
 
 @router.get("/locations")
 def list_locations(search: str = "", type: Optional[Literal["daily", "regular", "festival"]] = None,
-                   status: Optional[Literal["open", "closed"]] = None, db: Session = Depends(get_db)):
+                   status: Optional[Literal["open", "closed"]] = None, include_ended: bool = False, db: Session = Depends(get_db)):
     query = select(Location).order_by(Location.id)
     if search:
         # Escape SQL wildcard characters so this behaves like frontend substring search.
@@ -53,9 +54,9 @@ def list_locations(search: str = "", type: Optional[Literal["daily", "regular", 
         query = query.where(Location.name.ilike(term, escape="\\") | Location.address.ilike(term, escape="\\"))
     if type:
         query = query.where(Location.type == type)
-    if status:
-        query = query.where(Location.today_open == (status == "open"))
-    return [serialize_location(db, location) for location in db.scalars(query)]
+    locations = [serialize_location(db, location) for location in db.scalars(query)]
+    return [item for item in locations if (include_ended or item["eventStatus"] != "ended")
+            and (not status or item["todayOpen"] == (status == "open"))]
 
 
 @router.get("/locations/{location_id}")
@@ -68,12 +69,13 @@ def add_location(body: LocationCreate, db: Session = Depends(get_db),
                  user: User = Depends(session_user), idempotency_key: Optional[str] = Header(None)):
     def action():
         location = Location(**body.model_dump(), owner_id=user.id,
-                            identity_key=identity(body.name, body.lat, body.lng))
+                            identity_key=identity(body.name, body.lat, body.lng) + (
+                                "|" + body.starts_at.astimezone(timezone.utc).isoformat() if body.schedule_kind == "one_time" else ""))
         db.add(location)
         db.flush()
         record_activity(db, user, location, "addition")
         return serialize_location(db, location)
-    return idempotent_write(db, user, idempotency_key, "location", body.model_dump(), action)
+    return idempotent_write(db, user, idempotency_key, "location", body.model_dump(mode="json"), action)
 
 
 def submit_review(db, user, location, body):
@@ -86,6 +88,8 @@ def checkin(location_id: int, body: ReviewCreate, db: Session = Depends(get_db),
             user: User = Depends(session_user), idempotency_key: Optional[str] = Header(None)):
     def action():
         location = get_location(db, location_id)
+        if event_status(location) in ("upcoming", "ended"):
+            raise HTTPException(409, "Check-ins are available only while this bhandara is serving")
         db.add(Checkin(user_id=user.id, location_id=location.id, day=today()))
         submit_review(db, user, location, body)
         record_activity(db, user, location, "checkin", body.comment)

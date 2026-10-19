@@ -31,6 +31,7 @@ class Location(Base):
         CheckConstraint("lat BETWEEN -90 AND 90 AND lng BETWEEN -180 AND 180", name="valid_coordinates"),
         CheckConstraint("type IN ('daily', 'regular', 'festival')", name="valid_type"),
         CheckConstraint("seed_total >= 0 AND seed_today >= 0", name="positive_seed_counts"),
+        CheckConstraint("(schedule_kind = 'recurring' AND starts_at IS NULL AND ends_at IS NULL) OR (schedule_kind = 'one_time' AND starts_at IS NOT NULL AND ends_at IS NOT NULL AND ends_at > starts_at)", name="valid_event_schedule"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
@@ -43,6 +44,9 @@ class Location(Base):
     type: Mapped[str] = mapped_column(String(20), index=True)
     days: Mapped[list] = mapped_column(JSON)
     timings: Mapped[str] = mapped_column(String(200))
+    schedule_kind: Mapped[str] = mapped_column(String(20), default="recurring", server_default="recurring")
+    starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     today_open: Mapped[bool] = mapped_column(Boolean, default=True)
     seed_total: Mapped[int] = mapped_column(Integer, default=0)

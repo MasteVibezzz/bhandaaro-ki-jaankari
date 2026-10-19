@@ -1,4 +1,5 @@
 // Functions receive the application context explicitly; app.js owns shared state.
+import { eventStatus } from './locations.js';
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 function addBaseLayer(map) {
@@ -71,7 +72,7 @@ export function addMarkers(app) {
 
     app.getFilteredLocations().forEach(location => {
         try {
-            const color = location.todayOpen ? '#22c55e' : '#ef4444';
+            const color = (eventStatus(location) ? eventStatus(location) === 'serving' : location.todayOpen) ? '#22c55e' : '#ef4444';
             const marker = L.circleMarker([location.lat, location.lng], {
                 radius: 8,
                 fillColor: color,

@@ -177,6 +177,20 @@ Detailed endpoint and transaction behavior is in [the backend contract](docs/bac
   referrer policy with `same-origin` or `no-referrer`, bypass tile caches, prefetch
   regions, or automatically retry blocked tiles. See [the OSM tile policy](https://operations.osmfoundation.org/policies/tiles/).
 - A process-local rate limit supports this single-instance local stack. Shared rate limiting,
-  email verification/recovery, moderation, backups and production deployment remain planned.
+  email verification/recovery, community verification, backups and production deployment remain planned.
+
+## One-time bhandaaras
+
+Choose **One-time bhandara** in the add-location form for an event lasting a few hours.
+Enter both dates and times in India time (IST), including the next date for an event
+that crosses midnight. Events show Upcoming, Serving now, or Ended; the start is
+inclusive and the end is exclusive. The page updates these states automatically.
+Ended events are hidden from the default map and list; select **Show ended events**
+to see them again. Details, reviews and activity remain stored. Check-ins are
+accepted only during the serving window. Regular locations retain their existing schedules.
+
+The API accepts `schedule_kind: "one_time"`, timezone-aware `starts_at` and `ends_at`
+in addition to the venue fields. GET `/api/locations?include_ended=true` includes the
+archive; the default excludes ended events. Existing rows are migrated as recurring.
 
 Created by **Manit Bhatia** — [@MasteVibezzz](https://github.com/MasteVibezzz).

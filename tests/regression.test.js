@@ -7,6 +7,23 @@ import * as ui from '../ui.js';
 import * as maps from '../map.js';
 import { request, writeAndRefresh, submitForm } from '../api.js';
 
+test('one-time events cross midnight, change status at boundaries and hide after ending', () => {
+    const { app, element } = context();
+    const event = { ...app.bhandaaras[0], scheduleKind: 'one_time', startsAt: '2030-01-01T22:00:00+05:30', endsAt: '2030-01-02T01:00:00+05:30' };
+    assert.equal(locations.eventStatus(event, Date.parse(event.startsAt) - 1), 'upcoming');
+    assert.equal(locations.eventStatus(event, Date.parse(event.startsAt)), 'serving');
+    assert.equal(locations.eventStatus(event, Date.parse(event.endsAt)), 'ended');
+    for (const language of ['hi', 'en']) {
+        app.currentLanguage = language;
+        assert.ok(locations.scheduleText(app, event).includes('IST'));
+    }
+    app.bhandaaras = [{ ...event, startsAt: '2020-01-01T00:00:00Z', endsAt: '2020-01-01T01:00:00Z' }];
+    assert.equal(app.getFilteredLocations().length, 0);
+    element('showEnded').checked = true;
+    assert.equal(app.getFilteredLocations().length, 1);
+    assert.ok(app.createLocationCard(app.bhandaaras[0]).includes('Ended'));
+});
+
 function context() {
     const elements = new Map();
     const element = id => {

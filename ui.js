@@ -1,5 +1,6 @@
 // Functions receive the application context explicitly; app.js owns shared state.
 import { readStorage, writeStorage } from './storage.js';
+import { eventStatus, scheduleText, updateScheduleFields } from './locations.js';
 
 export function loadLanguagePreference(app) {
     const savedLanguage = readStorage('preferredLanguage', null, localStorage, false);
@@ -93,8 +94,8 @@ export function escapeHTML(app, value) {
 }
 
 export function createPopupContent(app, location) {
-    const statusClass = location.todayOpen ? 'open' : 'closed';
-    const statusText = location.todayOpen ? app.translate('open-status') : app.translate('closed-status');
+    const statusClass = (eventStatus(location) ? eventStatus(location) === 'serving' : location.todayOpen) ? 'open' : 'closed';
+    const statusText = eventStatus(location) ? app.translate('event-' + eventStatus(location)) : location.todayOpen ? app.translate('open-status') : app.translate('closed-status');
     
     return `
         <div class="custom-popup">
@@ -112,7 +113,7 @@ export function createPopupContent(app, location) {
                 </div>
                 <div class="popup-detail">
                     <i class="fas fa-clock"></i>
-                    <span>${app.escapeHTML(location.timings)}</span>
+                    <span>${app.escapeHTML(scheduleText(app, location))}</span>
                 </div>
                 <div class="popup-detail">
                     <i class="fas fa-star"></i>
@@ -133,6 +134,8 @@ export function createPopupContent(app, location) {
 
 export function bindEvents(app) {
     if (app.eventsBound) return;
+    document.getElementById('scheduleKind').addEventListener('change', updateScheduleFields);
+    document.getElementById('showEnded').addEventListener('change', () => app.filterLocations());
     app.eventsBound = true;
     document.getElementById('retryLoad')?.addEventListener('click', () => app.reload());
 
@@ -414,8 +417,8 @@ export function renderLocations(app) {
 }
 
 export function createLocationCard(app, location) {
-    const statusClass = location.todayOpen ? 'open' : 'closed';
-    const statusText = location.todayOpen ? app.translate('open-status') : app.translate('closed-status');
+    const statusClass = (eventStatus(location) ? eventStatus(location) === 'serving' : location.todayOpen) ? 'open' : 'closed';
+    const statusText = eventStatus(location) ? app.translate('event-' + eventStatus(location)) : location.todayOpen ? app.translate('open-status') : app.translate('closed-status');
     
     return `
             <div class="location-card">
@@ -433,7 +436,7 @@ export function createLocationCard(app, location) {
                 </div>
                 <div class="location-detail">
                     <i class="fas fa-clock"></i>
-                    <span>${app.escapeHTML(location.timings)}</span>
+                    <span>${app.escapeHTML(scheduleText(app, location))}</span>
                 </div>
                 <div class="location-detail">
                     <i class="fas fa-utensils"></i>
