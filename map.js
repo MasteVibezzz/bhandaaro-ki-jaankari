@@ -72,18 +72,33 @@ export function addMarkers(app) {
 
     app.getFilteredLocations().forEach(location => {
         try {
-            const color = (eventStatus(location) ? eventStatus(location) === 'serving' : location.todayOpen) ? '#22c55e' : '#ef4444';
+            const status = eventStatus(location);
+            const open = status ? status === 'serving' : location.todayOpen;
+            const state = status === 'upcoming' ? 'upcoming' : open ? 'open' : 'closed';
+            const color = status === 'upcoming' ? '#fbf2c0' : open ? '#75b9be' : '#8c8a93';
             const marker = L.circleMarker([location.lat, location.lng], {
                 radius: 8,
+                className: `map-marker map-marker--${state}`,
                 fillColor: color,
-                color: '#fff',
+                color: '#43281c',
                 weight: 2,
+                dashArray: open ? undefined : '3 3',
                 opacity: 1,
                 fillOpacity: 0.8
             }).addTo(app.map);
 
             const popupContent = app.createPopupContent(location);
             marker.bindPopup(popupContent, { maxWidth: 280, closeButton: true });
+            const element = marker.getElement?.();
+            if (element) {
+                const label = status ? app.translate('event-' + status) : app.translate(open ? 'open-status' : 'closed-status');
+                element.setAttribute('aria-label', `${location.name}: ${label}`);
+                element.setAttribute('role', 'button');
+                element.setAttribute('tabindex', '0');
+                element.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); marker.openPopup(); }
+                });
+            }
             
             app.markers.push(marker);
         } catch (error) {
@@ -104,6 +119,10 @@ export function selectLocation(app, latlng) {
     }
 
     app.selectedCoordinates = latlng;
+    const latInput = document.getElementById('locationLat');
+    const lngInput = document.getElementById('locationLng');
+    if (latInput) latInput.value = latlng.lat.toFixed(6);
+    if (lngInput) lngInput.value = latlng.lng.toFixed(6);
     
     try {
         app.selectedMarker = L.marker([latlng.lat, latlng.lng], { draggable: true })
@@ -111,6 +130,8 @@ export function selectLocation(app, latlng) {
 
         app.selectedMarker.on('dragend', (e) => {
             app.selectedCoordinates = e.target.getLatLng();
+            if (latInput) latInput.value = app.selectedCoordinates.lat.toFixed(6);
+            if (lngInput) lngInput.value = app.selectedCoordinates.lng.toFixed(6);
             app.updateCoordinatesDisplay();
             app.reverseGeocode(app.selectedCoordinates);
         });
@@ -132,7 +153,7 @@ export function updateCoordinatesDisplay(app) {
 
 export function reverseGeocode(app, latlng) {
     const addressField = document.getElementById('locationAddress');
-    if (addressField) {
+    if (addressField && (!addressField.value || /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(addressField.value))) {
         addressField.value = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
     }
 }

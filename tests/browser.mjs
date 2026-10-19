@@ -85,10 +85,16 @@ try {
     assert.equal(Number((await page.locator('#totalCheckins').textContent()).replace(/,/g, '')), before + 1);
     await page.click('#addLocationBtn');
     await page.locator('#mapPicker .leaflet-pane').first().waitFor({ state: 'attached' });
+    await page.emulateMedia({colorScheme: 'dark'});
+    assert.notEqual(await page.locator('#mapPicker .leaflet-tile-pane').evaluate(element => getComputedStyle(element).filter), 'none');
     await page.locator('#mapPicker .leaflet-control-attribution a[href="https://www.openstreetmap.org/copyright"]').waitFor();
     await page.locator('#mapPicker').click({ position: { x: 150, y: 120 } });
     await page.fill('#locationName', 'Browser kitchen ' + suffix);
     await page.fill('#locationAddress', 'Confirmed test address');
+    await page.fill('#locationLat', '18.53');
+    await page.fill('#locationLng', '73.86');
+    await page.locator('#locationLng').press('Tab');
+    assert.equal(await page.locator('#locationAddress').inputValue(), 'Confirmed test address');
     await page.selectOption('#locationType', 'daily');
     await page.fill('#locationTimings', '12 PM - 2 PM');
     await page.locator('.day-checkbox input').first().check();

@@ -63,6 +63,8 @@ export function applyTranslations(app) {
     if (feedbackTextarea) {
         feedbackTextarea.placeholder = app.translate('feedback-placeholder');
     }
+    document.querySelectorAll('.modal-close').forEach(button => button.setAttribute('aria-label', app.translate('close-dialog')));
+    document.getElementById('langToggle')?.setAttribute('aria-label', app.currentLanguage === 'hi' ? 'Switch to English' : 'हिंदी में देखें');
 }
 
 export function showAuthenticatedState(app) {
@@ -94,7 +96,7 @@ export function escapeHTML(app, value) {
 }
 
 export function createPopupContent(app, location) {
-    const statusClass = (eventStatus(location) ? eventStatus(location) === 'serving' : location.todayOpen) ? 'open' : 'closed';
+    const statusClass = eventStatus(location) === 'upcoming' ? 'upcoming' : (eventStatus(location) ? eventStatus(location) === 'serving' : location.todayOpen) ? 'open' : 'closed';
     const statusText = eventStatus(location) ? app.translate('event-' + eventStatus(location)) : location.todayOpen ? app.translate('open-status') : app.translate('closed-status');
     
     return `
@@ -145,11 +147,29 @@ export function bindEvents(app) {
             const id = Number(action.dataset.locationId);
             if (action.dataset.action === 'checkin') app.openCheckinModal(id);
             if (action.dataset.action === 'details') app.showLocationDetails(id);
+            if (action.dataset.action === 'clear-filters') {
+                for (const field of ['searchInput', 'typeFilter', 'statusFilter']) document.getElementById(field).value = '';
+                app.filterLocations();
+                document.getElementById('searchInput').focus();
+            }
         }
         if (!event.target.closest('.user-menu')) {
             document.getElementById('userDropdown')?.classList.add('hidden');
+            document.getElementById('userProfile')?.setAttribute('aria-expanded', 'false');
         }
     });
+
+    for (const field of ['locationLat', 'locationLng']) {
+        document.getElementById(field).addEventListener('change', () => {
+            const lat = document.getElementById('locationLat');
+            const lng = document.getElementById('locationLng');
+            if (lat.value !== '' && lng.value !== '' && lat.checkValidity() && lng.checkValidity()) {
+                app.selectLocation({ lat: Number(lat.value), lng: Number(lng.value) });
+            } else {
+                app.selectedCoordinates = null;
+            }
+        });
+    }
 
     // Authentication
     const signinBtn = document.getElementById('signinBtn');
@@ -245,6 +265,14 @@ export function bindModalEvents(app) {
         const modal = document.getElementById(modalId);
         if (!modal) return;
 
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('tabindex', '-1');
+        const title = modal.querySelector('h2');
+        title.id = modalId + 'Title';
+        modal.setAttribute('aria-labelledby', title.id);
+        modal.querySelector('.error-message')?.setAttribute('role', 'alert');
+
         const overlay = modal.querySelector('.modal-overlay');
         const closeBtn = modal.querySelector('.modal-close');
         
@@ -265,6 +293,20 @@ export function bindModalEvents(app) {
 
     // Add escape key listener
     document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !document.getElementById('userDropdown').classList.contains('hidden')) {
+            document.getElementById('userDropdown').classList.add('hidden');
+            document.getElementById('userProfile').setAttribute('aria-expanded', 'false');
+            document.getElementById('userProfile').focus();
+        }
+        const activeModal = document.querySelector('.modal:not(.hidden)');
+        if (activeModal && e.key === 'Tab') {
+            const controls = [...activeModal.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]')]
+                .filter(element => !element.disabled && element.getClientRects().length);
+            const first = controls[0], last = controls[controls.length - 1];
+            if (!first) { e.preventDefault(); activeModal.focus(); }
+            else if (e.shiftKey && (document.activeElement === first || document.activeElement === activeModal)) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
         if (e.key === 'Escape') {
             modals.forEach(modalId => {
                 const modal = document.getElementById(modalId);
@@ -277,6 +319,7 @@ export function bindModalEvents(app) {
 }
 
 export function openModal(app, modalId) {
+    if (!document.querySelector('.modal:not(.hidden)')) app.modalReturnFocus = document.activeElement;
     // Close any other open modals first
     document.querySelectorAll('.modal').forEach(modal => {
         if (modal.id !== modalId) {
@@ -288,6 +331,10 @@ export function openModal(app, modalId) {
     if (modal) {
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
+        for (const element of document.body.children) {
+            if (!element.classList.contains('modal') && element.tagName !== 'SCRIPT' && element.id !== 'successToast') element.inert = true;
+        }
+        modal.querySelector('input:not(:disabled), button')?.focus({ preventScroll: true });
 
         // Initialize map picker if opening add location modal
         if (modalId === 'addLocationModal') {
@@ -306,6 +353,7 @@ export function closeModal(app, modalId) {
     if (modal) {
         modal.classList.add('hidden');
         document.body.style.overflow = 'auto';
+        for (const element of document.body.children) element.inert = false;
         app.clearErrors();
         
         // Reset forms when closing
@@ -329,11 +377,12 @@ export function closeModal(app, modalId) {
             app.selectedRating = 0;
             app.resetRatingHighlight();
         }
+        if (app.modalReturnFocus?.isConnected) app.modalReturnFocus.focus({ preventScroll: true });
+        app.modalReturnFocus = null;
     }
 }
 
 export function switchModal(app, targetModalId) {
-    document.querySelectorAll('.modal').forEach(modal => modal.classList.add('hidden'));
     app.openModal(targetModalId);
 }
 
@@ -341,6 +390,7 @@ export function toggleUserDropdown(app) {
     const dropdown = document.getElementById('userDropdown');
     if (dropdown) {
         dropdown.classList.toggle('hidden');
+        document.getElementById('userProfile').setAttribute('aria-expanded', String(!dropdown.classList.contains('hidden')));
     }
 }
 
@@ -380,11 +430,15 @@ export function switchView(app, viewType) {
     }
 
     app.currentView = viewType;
+    const wide = window.matchMedia('(min-width: 48rem)').matches;
+    document.querySelector('.content-grid')?.classList.toggle('list-only', viewType === 'list');
+    mapViewBtn.setAttribute('aria-pressed', String(viewType === 'map'));
+    listViewBtn.setAttribute('aria-pressed', String(viewType === 'list'));
     
     if (viewType === 'map') {
         // Show map, hide list
         mapSection.classList.remove('hidden');
-        listSection.classList.add('hidden');
+        listSection.classList.toggle('hidden', !wide);
         mapViewBtn.classList.add('active');
         listViewBtn.classList.remove('active');
         
@@ -411,31 +465,33 @@ export function renderLocations(app) {
     if (!container) return;
 
     const locations = app.getFilteredLocations();
+    const count = document.getElementById('resultCount');
+    if (count) count.textContent = `${locations.length} ${app.translate('results-label')}`;
     container.innerHTML = locations.length
         ? locations.map(location => app.createLocationCard(location)).join('')
-        : `<p class="empty-state">${app.escapeHTML(app.translate('no-results') || 'No locations found.')}</p>`;
+        : `<div class="empty-state"><p>${app.escapeHTML(app.translate('no-results') || 'No locations found.')}</p><button class="btn btn--outline" data-action="clear-filters">${app.translate('clear-filters')}</button></div>`;
 }
 
 export function createLocationCard(app, location) {
-    const statusClass = (eventStatus(location) ? eventStatus(location) === 'serving' : location.todayOpen) ? 'open' : 'closed';
+    const statusClass = eventStatus(location) === 'upcoming' ? 'upcoming' : (eventStatus(location) ? eventStatus(location) === 'serving' : location.todayOpen) ? 'open' : 'closed';
     const statusText = eventStatus(location) ? app.translate('event-' + eventStatus(location)) : location.todayOpen ? app.translate('open-status') : app.translate('closed-status');
     
     return `
-            <div class="location-card">
+            <article class="location-card">
             <div class="location-header">
                 <h3 class="location-title">${app.escapeHTML(location.name)}</h3>
-                <span class="location-status ${statusClass}">
-                    <i class="fas fa-circle"></i>
+                <div class="location-tags"><span class="location-status ${statusClass}">
+                    <i class="fas fa-circle" aria-hidden="true"></i>
                     ${statusText}
-                </span>
+                </span>${location.isDemo ? `<span class="demo-tag">${app.translate('demo-label')}</span>` : ''}</div>
             </div>
             <div class="location-details">
                 <div class="location-detail">
                     <i class="fas fa-map-marker-alt"></i>
                     <span>${app.escapeHTML(location.address)}</span>
                 </div>
-                <div class="location-detail">
-                    <i class="fas fa-clock"></i>
+                <div class="location-detail schedule-detail">
+                    <i class="fas fa-clock" aria-hidden="true"></i>
                     <span>${app.escapeHTML(scheduleText(app, location))}</span>
                 </div>
                 <div class="location-detail">
@@ -443,16 +499,15 @@ export function createLocationCard(app, location) {
                     <span>${app.escapeHTML(location.description)}</span>
                 </div>
             </div>
-            <div class="location-actions">
-                <button class="btn btn--primary btn--sm checkin-btn" data-action="checkin" data-location-id="${Number(location.id)}">
-                    ${app.translate('checkin-btn')}
-                </button>
-                <div class="location-stats">
-                    <span><i class="fas fa-star"></i> ${app.escapeHTML(location.rating)}</span>
+            <div class="location-stats">
+                    <span><i class="fas fa-star" aria-hidden="true"></i> ${app.escapeHTML(location.rating)} / 5</span>
                     <span><i class="fas fa-users"></i> ${app.escapeHTML(location.checkinsToday)} ${app.translate('today').toLowerCase()}</span>
-                </div>
             </div>
-        </div>
+            <div class="location-actions">
+                <a class="btn btn--outline" href="https://www.google.com/maps/dir/?api=1&destination=${Number(location.lat)},${Number(location.lng)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-location-arrow" aria-hidden="true"></i>${app.translate('directions')}</a>
+                <button class="btn btn--secondary btn--sm checkin-btn" data-action="checkin" data-location-id="${Number(location.id)}">${app.translate('checkin-btn')}</button>
+            </div>
+        </article>
     `;
 }
 

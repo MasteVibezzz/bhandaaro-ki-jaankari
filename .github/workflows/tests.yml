@@ -47,3 +47,4 @@ jobs:
           python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8001 &
           curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:8001/health/ready
           npm run test:browser
+          npm run test:design

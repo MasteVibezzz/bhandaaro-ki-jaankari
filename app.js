@@ -95,8 +95,9 @@ export class BhandaaraApp {
     }
 
     setInitialView() {
-        // Ensure we start with the map view properly set
-        this.switchView('map');
+        const layout = window.matchMedia('(min-width: 48rem)');
+        this.switchView(layout.matches ? 'map' : 'list');
+        layout.addEventListener('change', () => this.switchView(this.currentView));
     }
     openAddLocation(...args) { return locations.openAddLocation(this, ...args); }
     handleAddLocation(...args) { return locations.handleAddLocation(this, ...args); }
